@@ -53,7 +53,7 @@ def east_wr(U_inf,kappa):
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
 
-from turbines_v01 import iea_10MW
+from src.utilities.turbines import iea_10MW
 turb = iea_10MW()
 Ct_f = turb.Ct_f
 
@@ -285,7 +285,7 @@ ill_cb2(cf,gs[7,:])
 
 if SAVE_FIG:
     from pathlib import Path
-    path_plus_name = "JFM_report_v02/Figures/"+Path(__file__).stem+"_"+str(a_0)+".png"
+    path_plus_name = "fig images/"+Path(__file__).stem+"_"+str(a_0)+".png"
     plt.savefig(path_plus_name,dpi='figure',format='png',bbox_inches='tight')
 
     print("figure saved")
