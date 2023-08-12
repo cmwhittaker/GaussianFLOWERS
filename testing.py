@@ -118,4 +118,4 @@ own_wr.cjd3_PA_all_coeffs
 own_wr.cjd3_full_Fourier_coeffs
 
 #%%
-print("github test4")
+print("github test6")
