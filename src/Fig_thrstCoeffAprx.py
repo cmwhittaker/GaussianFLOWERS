@@ -53,18 +53,18 @@ def east_wr(U_inf,kappa):
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
 
-from src.utilities.turbines import iea_10MW
+from utilities.turbines import iea_10MW
 turb = iea_10MW()
 Ct_f = turb.Ct_f
 
 theta_i = np.linspace(0,2*np.pi,BINS,endpoint=False)
 
 kappa = 8.0
-from AEP3_3_functions import num_F_v02,rectangular_domain,pce,get_WAV_CT1
 U_ic,P_ic = combined_wr(5,14,kappa)
 #the thrust coefficient is based on the combined wind rose
-WAV_CT = get_WAV_CT1(U_ic,P_ic,turb)
-WAV_CT = WAV_CT*0.8
+
+from utilities.helpers import rectangular_domain,pce,get_WAV_pp
+WAV_CT = get_WAV_pp(U_ic,P_ic,turb,turb.Ct_f)
 
 west = False #westerly direction if true
 if west:
@@ -78,6 +78,7 @@ xt,yt,layout = get_layout()
 
 xx,yy,plot_points,xlims,ylims = rectangular_domain(layout,xr=300)
 
+from utilities.AEP3_functions import num_F_v02
 #reference AEP first (Ct_op == 1 means Cp(U_w) done in turn)
 aep_a,Uwt_ja,Uwff_ja= num_F_v02(U_i,P_i,theta_i,
                        layout,
@@ -93,10 +94,11 @@ aep_b,Uwt_jb,_      = num_F_v02(U_i,P_i,theta_i,
                        RHO=1.225,K=0.025,
                        u_lim=U_LIM,Ct_op=3,WAV_CT=WAV_CT,cross_ts=True,ex=True,Cp_op=1)
 
+#the rest is a load leg work plotting the results
+
 #set font
-from matplotlib import rc
-rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
-rc('text', usetex=True)
+from utilities.plotting_funcs import set_latex_font
+set_latex_font() #set latex font 
 
 def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True,ylim=None):
     ax = fig.add_subplot(gs,projection='polar')
@@ -259,13 +261,11 @@ fig = plt.figure(figsize=(5,7), dpi=200)
 vmax = np.max(Uwff_ja)
 vmin = np.min(Uwff_ja)
 
-from Fig_powCoeffAprx_v07 import nice_polar_plot
 #first is the wind rose
 nice_polar_plot(fig,gs[0,0],theta_i,U_i*P_i,"$P(\\theta)U_\infty(\\theta)$")
 nice_polar_plot(fig,gs[0,1],theta_i,P_i,"$P(\\theta)$",bar=False)
 #using appended values for the last plot
 nice_polar_plot(fig,gs[0,2],atheta_i,aU_i,"$U_\infty(\\theta)$",bar=False,ylim=15)
-
 
 #next is the flow field contourf
 z2 = pce(aep_a,aep_b)
