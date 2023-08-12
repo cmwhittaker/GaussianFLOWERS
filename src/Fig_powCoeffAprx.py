@@ -1,11 +1,18 @@
-#%% Version 7, now updated to use v2 of the numerical functions
+#%% 
+# Produce the figure to demonstrate the limitations of the POWER coefficient approximation: C_p(U_w) \approx C_p(U_\infty)
+
+%load_ext autoreload
+%autoreload 2
+
 import numpy as np
 
+west = False #westerly direction if true
+
 NT = 5 #number of turbines 
-SPACING = 7 
+SPACING = 7 #spacing in diameters
 BINS = 360
 U_LIM = 4
-XPAD = 7
+XPAD = 7 #padding around the turbines for the contour plot
 YPAD = 7
 
 CP_LOWER = 0
@@ -20,16 +27,18 @@ def get_layout():
     return xt,yt,np.column_stack((xt,yt))
 
 from scipy.stats import vonmises
-#the Westerly portion of the wind rose
-def west_wr(U_inf,kappa):
+
+#the Easterly portion of the wind rose
+def east_wr(U_inf,kappa):
     U_i = np.zeros(BINS)
     U_i[0:180] = U_inf #0 to pi is U_inf
     mu1 = (1/2)*np.pi # westerly direction
     P_i = vonmises.pdf(theta_i, kappa, loc=mu1) 
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
-#the Easterly portion of the wind rose
-def east_wr(U_inf,kappa):
+
+#the Westerly portion of the wind rose
+def west_wr(U_inf,kappa):
     U_i = np.zeros(BINS)
     U_i[180:] = U_inf #pi to 2pi is U_inf
     mu2 = (3/2)*np.pi #easterly direction
@@ -37,25 +46,24 @@ def east_wr(U_inf,kappa):
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
 
-from turbines_v01 import iea_10MW
+from utilities.turbines import iea_10MW
 turb = iea_10MW()
-Ct_f = turb.Ct_f
-Cp_f = turb.Cp_f
 
 theta_i = np.linspace(0,2*np.pi,BINS,endpoint=False)
 kappa = 8.0
-west = False #westerly direction if true
+
 if west:
-    a_0 = 5
+    a_0 = 6
     U_i,P_i = west_wr(a_0,kappa)
-else:
+else: #otherwise easterly
     a_0 = 14
     U_i,P_i = east_wr(a_0,kappa)
 
-xt,yt,layout = get_layout()
-from AEP3_3_functions import num_F_v02,rectangular_domain,pce
+from utilities.helpers import linear_layout,rectangular_domain,pce
+xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,xlims,ylims = rectangular_domain(layout,xr=300)
 
+from utilities.AEP3_functions import num_F_v02
 #reference AEP first (Cp_op == 1 means Cp(U_w))
 aep_a,Uwt_ja,Uwff_ja= num_F_v02(U_i,P_i,theta_i,
                        layout,
@@ -71,10 +79,11 @@ aep_b,Uwt_jb,_      = num_F_v02(U_i,P_i,theta_i,
                        RHO=1.225,K=0.025,
                        u_lim=U_LIM,Ct_op=1,cross_ts=True,ex=True,Cp_op=2)
 
+#the rest is a load leg work plotting the results
+
 #set font
-from matplotlib import rc
-rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
-rc('text', usetex=True)
+from utilities.plotting_funcs import set_latex_font
+set_latex_font() #set latex font 
 
 def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True,ylim=None):
     ax = fig.add_subplot(gs,projection='polar')
@@ -144,10 +153,10 @@ def nice_plot1(fig,gs,Uw_js):
     #a "nice" plot of the turbine power coefficient curve
     ax = fig.add_subplot(gs)
     xs = np.linspace(CP_LOWER,CP_UPPER,200)
-    ax.plot(xs,Cp_f(xs),color='grey',linewidth=1)
-    ax.scatter(Uw_js,Cp_f(Uw_js),marker='x',s=10,color='black')
+    ax.plot(xs,turb.Cp_f(xs),color='grey',linewidth=1)
+    ax.scatter(Uw_js,turb.Cp_f(Uw_js),marker='x',s=10,color='black')
     ax.set(xlim=(CP_LOWER,CP_UPPER),ylabel='$C_p$',ylim=(0,None),xlabel='Wake Velocity $U_w$ / $ms^{-1}$')#
-    horizontal_line(ax,0,Cp_f(a_0),None,'left','top',2,text1_yoff)
+    horizontal_line(ax,0,turb.Cp_f(a_0),None,'left','top',2,text1_yoff)
     return ax
 
 def nice_plot2(fig,gs,Uw_js):
@@ -155,20 +164,20 @@ def nice_plot2(fig,gs,Uw_js):
     ax = fig.add_subplot(gs)
     xmin,xmax = np.min(Uwff_ja),np.max(Uwff_ja)
     xrng = 0.1*(xmax - xmin)
-    cp_arr = np.append(Cp_f(Uwff_ja),Cp_f(a_0))
+    cp_arr = np.append(turb.Cp_f(Uwff_ja),turb.Cp_f(a_0))
     ymax,ymin = np.max(cp_arr),np.min(cp_arr)
     yrng = 0.2*(ymax-ymin)
     xs = np.linspace(xmin-xrng,xmax+xrng,200)
     ax.set(xlim=(xmin-xrng,xmax+xrng),ylim=(ymin-yrng,ymax+yrng),ylabel='$C_p$',xticks=[], xticklabels=[])
-    ax.plot(xs,Cp_f(xs),color='grey',linewidth=1)
-    ax.scatter(Uw_js,Cp_f(Uw_js),marker='x',s=10,color='black')
+    ax.plot(xs,turb.Cp_f(xs),color='grey',linewidth=1)
+    ax.scatter(Uw_js,turb.Cp_f(Uw_js),marker='x',s=10,color='black')
     'an'
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.1)
-    offset = (np.max(Cp_f(Uw_js)) - np.min(Cp_f(Uw_js))) * 0.1
+    offset = (np.max(turb.Cp_f(Uw_js)) - np.min(turb.Cp_f(Uw_js))) * 0.1
     for i in range(NT): #label each turbine
             Uw = Uwt_ja[i]
-            ax.annotate(str(i+1), xy=(Uw,Cp_f(Uw)-offset), ha='center', va='top',color='black',bbox=props,fontsize=6,xycoords='data')
-    horizontal_line(ax,xmin-xrng,Cp_f(a_0),None,'left',text2_align,2,text2_yoff)
+            ax.annotate(str(i+1), xy=(Uw,turb.Cp_f(Uw)-offset), ha='center', va='top',color='black',bbox=props,fontsize=6,xycoords='data')
+    horizontal_line(ax,xmin-xrng,turb.Cp_f(a_0),None,'left',text2_align,2,text2_yoff)
     return ax,ymax+yrng
 
 def scale_cb(cax,c,d,labels=True):
@@ -215,19 +224,19 @@ def ill_cb2(cf,gs): #illustrative colourbar on zoomed IN
 
 #a bunch of plotting faff 
 if west:
-    aU_i = np.append(0,U_i) #this is so the polar plot shows a complete semi-circle
-    atheta_i = np.append(0,theta_i) 
+    aU_i = np.append(U_i,0)
+    atheta_i = np.append(theta_i,0)
     #the Cp(U_\infty) label needs *slightly* offsetting differently for each case
     text1_yoff = -6 #this is so the label doesn't overlap the points
     text2_align='top' #ditto
     text2_yoff = -2 #ditto
 else:
-    aU_i = np.append(U_i,0)
-    atheta_i = np.append(theta_i,0)
+    aU_i = np.append(0,U_i) #this is so the polar plot shows a complete semi-circle
+    atheta_i = np.append(0,theta_i) 
     text1_yoff = -2
     text2_align='bottom'
     text2_yoff = 2
-
+    
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 br = 20
@@ -260,7 +269,12 @@ ill_cb2(cf,gs[7,:])
 
 if SAVE_FIG:
     from pathlib import Path
-    path_plus_name = "JFM_report_v02/Figures/"+Path(__file__).stem+"_"+str(a_0)+".png"
-    plt.savefig(path_plus_name,dpi='figure',format='png',bbox_inches='tight')
 
-    print("figure saved")
+    current_file_path = Path(__file__)
+    fig_dir = current_file_path.parent.parent / "fig images"
+    fig_name = f"Fig_powCoeffAprx_{a_0}ms{'W'*west}{'E'*(1-west)}.png"
+    image_path = fig_dir / fig_name
+
+    plt.savefig(image_path, dpi='figure', format='png', bbox_inches='tight')
+
+    print(f"figure saved as {fig_name}")

@@ -1,5 +1,12 @@
 #%% random helper functions
 import numpy as np
+
+def linear_layout(no_xt,s):
+    #returns a linear 1 x no_xt turbine grid layout starting at  (0,0) then continuing at (s,0),(2*s,0) ... etc
+    xt = np.arange(0,no_xt*s,s)
+    yt = np.zeros_like(xt)
+    return xt,yt,np.column_stack((xt,yt))
+
 def rectangular_layout(no_xt,s,rot):
     #returns a rectangular no_xt x no_xt turbine grid layout centered on (0,0) with clockwise rotation (in radians!) rot 
 
@@ -78,8 +85,11 @@ from floris.tools import WindRose
 def get_floris_wind_rose(site_n):
     #use floris to parse wind rose toolkit site data
     #(each site has its own folder)
+    from pathlib import Path
+    current_file_path = Path(__file__)
+    folder_name = current_file_path.parent.parent.parent/ "data" / "WindRoseData_D" / ("site"+str(site_n))
+
     fl_wr = WindRose()
-    folder_name = "data/WindRoseData_D/site" +str(site_n)
     fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
     wr.freq_val = wr.freq_val/np.sum(wr.freq_val)

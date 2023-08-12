@@ -1,10 +1,12 @@
-#%% Version 7, now updated to use v2 of the numerical functions
-#this is based on the Fig_powCoeffAprx v07 program
+#%% 
+# Produce the figure to demonstrate the limitations of the THRUST coefficient approximation: C_t(U_w) \approx \overline{C_t}
 
 %load_ext autoreload
 %autoreload 2
 
 import numpy as np
+
+west = True #westerly direction if true
 
 NT = 5 #number of turbines 
 SPACING = 7 
@@ -16,12 +18,7 @@ U_LIM = 4
 CP_LOWER = 0
 CP_UPPER = 27
 
-SAVE_FIG = False
-
-def get_layout():
-    xt = np.arange(0,NT*SPACING,SPACING)
-    yt = np.zeros_like(xt)
-    return xt,yt,np.column_stack((xt,yt))
+SAVE_FIG = True
 
 from scipy.stats import vonmises
 def combined_wr(U_inf1,U_inf2,kappa):
@@ -36,7 +33,8 @@ def combined_wr(U_inf1,U_inf2,kappa):
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
 
-def west_wr(U_inf,kappa):
+#the Easterly portion of the wind rose
+def east_wr(U_inf,kappa):
     U_i = np.zeros(BINS)
     U_i[0:180] = U_inf #0 to pi is U_inf
     mu1 = (1/2)*np.pi # westerly direction
@@ -44,8 +42,8 @@ def west_wr(U_inf,kappa):
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
 
-#the Easterly portion of the wind rose
-def east_wr(U_inf,kappa):
+#the Westerly portion of the wind rose
+def west_wr(U_inf,kappa):
     U_i = np.zeros(BINS)
     U_i[180:] = U_inf #pi to 2pi is U_inf
     mu2 = (3/2)*np.pi #easterly direction
@@ -61,12 +59,11 @@ theta_i = np.linspace(0,2*np.pi,BINS,endpoint=False)
 
 kappa = 8.0
 U_ic,P_ic = combined_wr(5,14,kappa)
-#the thrust coefficient is based on the combined wind rose
 
-from utilities.helpers import rectangular_domain,pce,get_WAV_pp
+from utilities.helpers import linear_layout,rectangular_domain,pce,get_WAV_pp
+#the thrust coefficient is based on the combined wind rose
 WAV_CT = get_WAV_pp(U_ic,P_ic,turb,turb.Ct_f)
 
-west = False #westerly direction if true
 if west:
     a_0 = 6
     U_i,P_i = west_wr(a_0,kappa)
@@ -74,8 +71,7 @@ else: #otherwise easterly
     a_0 = 14
     U_i,P_i = east_wr(a_0,kappa)
 
-xt,yt,layout = get_layout()
-
+xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,xlims,ylims = rectangular_domain(layout,xr=300)
 
 from utilities.AEP3_functions import num_F_v02
@@ -168,8 +164,8 @@ def nice_plot1(fig,gs,Uw_js):
     #a "nice" plot of the turbine power coefficient curve
     ax = fig.add_subplot(gs)
     xs = np.linspace(CP_LOWER,CP_UPPER,200)
-    ax.plot(xs,Ct_f(xs),color='grey',linewidth=1)
-    ax.scatter(Uw_js,Ct_f(Uw_js),marker='x',s=10,color='black')
+    ax.plot(xs,turb.Ct_f(xs),color='grey',linewidth=1)
+    ax.scatter(Uw_js,turb.Ct_f(Uw_js),marker='x',s=10,color='black')
     ax.set(xlim=(CP_LOWER,CP_UPPER),ylabel='$C_t$',ylim=(0,None),xlabel='Wake Velocity $U_w$ / $ms^{-1}$')#
     horizontal_line(ax,0,WAV_CT,None,'left','top',2,text1_yoff)
     return ax
@@ -179,19 +175,19 @@ def nice_plot2(fig,gs,Uw_js):
     ax = fig.add_subplot(gs)
     xmin,xmax = np.min(Uwff_ja),np.max(Uwff_ja)
     xrng = 0.1*(xmax - xmin)
-    ct_arr = np.append(Ct_f(Uwff_ja),WAV_CT)
+    ct_arr = np.append(turb.Ct_f(Uwff_ja),WAV_CT)
     ymax,ymin = np.max(ct_arr),np.min(ct_arr)
     yrng = 0.2*(ymax-ymin)
     xs = np.linspace(xmin-xrng,xmax+xrng,200)
     ax.set(xlim=(xmin-xrng,xmax+xrng),ylim=(ymin-yrng,ymax+yrng),ylabel='$C_t$',xticks=[], xticklabels=[])
-    ax.plot(xs,Ct_f(xs),color='grey',linewidth=1)
-    ax.scatter(Uw_js,Ct_f(Uw_js),marker='x',s=10,color='black')
+    ax.plot(xs,turb.Ct_f(xs),color='grey',linewidth=1)
+    ax.scatter(Uw_js,turb.Ct_f(Uw_js),marker='x',s=10,color='black')
     'an'
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.1)
-    offset = (np.max(Ct_f(Uw_js)) - np.min(Ct_f(Uw_js))) * 0.1
+    offset = (np.max(turb.Ct_f(Uw_js)) - np.min(turb.Ct_f(Uw_js))) * 0.1
     for i in range(NT): #label each turbine
             Uw = Uwt_ja[i]
-            ax.annotate(str(i+1), xy=(Uw,Ct_f(Uw)-offset), ha='center', va='top',color='black',bbox=props,fontsize=6,xycoords='data')
+            ax.annotate(str(i+1), xy=(Uw,turb.Ct_f(Uw)-offset), ha='center', va='top',color='black',bbox=props,fontsize=6,xycoords='data')
     horizontal_line(ax,xmin-xrng,WAV_CT,None,'left',text2_align,2,text2_yoff)
     return ax,ymax+yrng
 
@@ -239,19 +235,19 @@ def ill_cb2(cf,gs): #illustrative colourbar on zoomed IN
 
 #a bunch of plotting faff 
 if west:
+    aU_i = np.append(U_i,0)
+    atheta_i = np.append(theta_i,0)
+    text1_yoff = -2
+    text2_align='bottom'
+    text2_yoff = 2
+else:
     aU_i = np.append(0,U_i) #this is so the polar plot shows a complete semi-circle
     atheta_i = np.append(0,theta_i) 
     #the Ct(U_\infty) label needs *slightly* offsetting differently for each case
     text1_yoff = -2 #this is so the label doesn't overlap the points
     text2_align='bottom' #ditto
     text2_yoff = 2 #ditto
-else:
-    aU_i = np.append(U_i,0)
-    atheta_i = np.append(theta_i,0)
-    text1_yoff = -2
-    text2_align='bottom'
-    text2_yoff = 2
-
+    
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 br = 20
@@ -285,7 +281,12 @@ ill_cb2(cf,gs[7,:])
 
 if SAVE_FIG:
     from pathlib import Path
-    path_plus_name = "fig images/"+Path(__file__).stem+"_"+str(a_0)+".png"
-    plt.savefig(path_plus_name,dpi='figure',format='png',bbox_inches='tight')
 
-    print("figure saved")
+    current_file_path = Path(__file__)
+    fig_dir = current_file_path.parent.parent / "fig images"
+    fig_name = f"Fig_thrstCoeffAprx_{a_0}ms{'W'*west}{'E'*(1-west)}.png"
+    image_path = fig_dir / fig_name
+
+    plt.savefig(image_path, dpi='figure', format='png', bbox_inches='tight')
+
+    print(f"figure saved as {fig_name}")
