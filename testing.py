@@ -117,5 +117,3 @@ own_wr = wind_rose(bin_no_bins=NO_BINS,custom=None,a_0=8,site=site_n,Cp_f=turb.C
 own_wr.cjd3_PA_all_coeffs
 own_wr.cjd3_full_Fourier_coeffs
 
-#%% plot 
-print("testing github1")

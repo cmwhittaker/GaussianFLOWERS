@@ -3,7 +3,7 @@
 import numpy as np
 #a lot of fuctionality has been added post initial writing, so it's a bit messy - but very functional.
 class wind_rose:
-
+    
     def load_csv_data(self,filepath):
         data = np.loadtxt(open(filepath,"rb"), delimiter=",", skiprows=2)
         direction = data[:,5] #wind direction is 6th column (zero indexed)
