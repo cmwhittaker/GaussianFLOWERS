@@ -1,5 +1,6 @@
-#%% Figure to show the wind roses and the original speed and frequency distributions used in the evaluation of the Ctag vs Floris vs CubeAv Evaluation
-#%%get the wind rose data
+#%% Figure to show the wind roses, their constiuents (P_i and U_i) and the variation in thrust and power coefficient with direction (C_t(U_i and C_p(U_i)))
+
+#get the wind rose data
 %load_ext autoreload
 %autoreload 2
 
@@ -17,7 +18,6 @@ for i in range(len(site_n)):
     U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
 
 #then plot the roses 
-
 from utilities.plotting_funcs import nice_polar_plot_A
 
 from matplotlib import rc

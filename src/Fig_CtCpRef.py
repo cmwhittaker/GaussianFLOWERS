@@ -1,13 +1,14 @@
 #% A figure to show the thrust and power coefficient of the chosen turbine. 
 
-#%% Set font
-from matplotlib import rc
-rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
-rc('text', usetex=True)
-import numpy as np
+from utilities.plotting_funcs import set_latex_font
+set_latex_font()
+
 from utilities.turbines import iea_10MW
 turb = iea_10MW()
+
+import numpy as np
 ws = np.linspace(0,27,200)
+
 import matplotlib.pyplot as plt
 fig,ax = plt.subplots(figsize=(3,3),dpi=250)
 ax.plot(ws,turb.Ct_f(ws),label='$C_t$',color='black')
