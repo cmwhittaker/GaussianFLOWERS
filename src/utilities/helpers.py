@@ -9,7 +9,6 @@ def linear_layout(no_xt,s):
 
 def rectangular_layout(no_xt,s,rot):
     #returns a rectangular no_xt x no_xt turbine grid layout centered on (0,0) with clockwise rotation (in radians!) rot 
-
     low = (no_xt)/2-0.5
     xt = np.arange(-low,low+1,1)*s
     yt = np.arange(-low,low+1,1)*s
@@ -33,6 +32,11 @@ def rectangular_domain(layout,xpad=7,ypad=7,xr=100,yr=100):
     y = np.linspace(ylims[0],ylims[1],yr)
     xx,yy = np.meshgrid(x,y)
     return xx,yy,np.column_stack((xx.reshape(-1),yy.reshape(-1))),xlims,ylims
+
+def fixed_rectangular_domain(extent,r=200):
+    #rectilinear grid shape (r**2,2) over rectange centered on (0,0) with side lengths 2*extent
+    xx,yy = np.meshgrid(np.linspace(-extent,extent,r),np.linspace(-extent,extent,r))
+    return xx,yy,np.column_stack((xx.reshape(-1),yy.reshape(-1)))
 
 def gen_local_grid(layout,plot_points):
     #find the r, theta coordinates relative to each turbine

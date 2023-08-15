@@ -1,137 +1,37 @@
-#%% Figure to show the effect of things on aep accuracy
-#totally different from v01
+#%% Produce the 3x3 wind roses(sites)xlayouts figure that compares the accuracy of Gaussian FLOWERS to a floris reference
 
-#v02 was more 
+#(rows: effect of changes to the wind rose
+#colums: effect of increasing the size of the farm)
 
-#rows: effect of changes to the wind rose
-#colums: effect of increasing the size of the farm
-
-#the plotting is based on Fig_XtermAprx_v03, the data generation is based on Fig_thrstCoeffAprx_v07
-
-#% A figure to show the effect of neglecting the cross terms in the product of the sums
 #%% get data to plot
 %load_ext autoreload
 %autoreload 2
 import numpy as np
 SAVE_FIG = False
-SPACING = 7
-INVALID_R = None
-RESOLUTION = 100
-EXTENT = 30
-flag = 1
-
-def rectangular_domain(extent,r=200):
-    X,Y = np.meshgrid(np.linspace(-extent,extent,r),np.linspace(-extent,extent,r))
-    return X,Y,np.column_stack((X.reshape(-1),Y.reshape(-1)))
-
-def rectangular_layout(no_xt,s,rot):
-    low = (no_xt)/2-0.5
-    xt = np.arange(-low,low+1,1)*s
-    yt = np.arange(-low,low+1,1)*s
-    Xt,Yt = np.meshgrid(xt,yt)
-    Xt,Yt = [_.reshape(-1) for _ in [Xt,Yt]]
-    rot_Xt = Xt * np.cos(rot) + Yt * np.sin(rot)
-    rot_Yt = -Xt * np.sin(rot) + Yt * np.cos(rot) 
-    layout = np.column_stack((rot_Xt.reshape(-1),rot_Yt.reshape(-1)))
-    return layout#just a single layout for now
+SPACING = 7 #turbine spacing normalised by rotor DIAMETER
+U_LIM = None #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct)
+RESOLUTION = 100 #number of x/y points in contourf meshgrid
+EXTENT = 30 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
+K = 0.03 #expansion parameter for the Gaussian model
+NO_BINS = 72 #number of bins in the wind rose
+ROWS = 3 #number of sites
+COLS = 3 #number of layout variations
 
 def empty2dPyarray(rows,cols): #create empty 2d python array
     return [[0 for j in range(cols)] for i in range(rows)]
 
-from floris.tools import WindRose
-def get_floris_wind_rose(site_n):
-    fl_wr = WindRose()
-    folder_name = "WindRoseData_D/site" +str(site_n)
-    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None)
-    wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
-    wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
-    U_i = wr.ws
-    P_i = wr.freq_val
-    return np.array(U_i),np.array(P_i)
+theta_i = np.linspace(0,360,NO_BINS,endpoint=False) #
 
-import time
-def floris_timed_aep(U_i,P_i,theta_i,layout,turb,wake=True,timed=True):
-    from floris.tools import FlorisInterface
-    fi = FlorisInterface("floris_settings.yaml")
-    fi.reinitialize(wind_directions=theta_i, wind_speeds=U_i, time_series=True,layout_x=turb.D*layout[:,0],layout_y=turb.D*layout[:,1])
-    if wake:
-        if timed:
-            timings = %timeit -o -q fi.calculate_wake()
-            time = timings.best
-        else:
-            fi.calculate_wake()
-            time = np.NaN
-    else:
-        fi.calculate_no_wake()
-        time = np.NaN
-    aep_array = fi.get_turbine_powers() #happy days, we can go from here
-    pow_j = np.sum(P_i[:,None,None]*aep_array,axis=0)
-    return pow_j/(1*10**6),time
-
-def slow_numerical_aep(U_i,P_i,theta_i,layout,plot_points,turb,K):
-    pow_j,_,Uwff_ja= num_F_v02(U_i,P_i,theta_i,
-                     layout,
-                     plot_points,
-                     turb,
-                     K=K,
-                     u_lim=None,
-                     Ct_op=1,WAV_CT=WAV_CT,
-                     Cp_op=1,cross_ts=True,ex=False)
-    return pow_j,Uwff_ja
-
-def fast_numerical_aep(U_i,P_i,theta_i,layout,turb,K,timed=True):
-    from AEP3_3_functions import cubeAv_v5
-    if timed:
-        result = []
-        timings = %timeit -o -q result.append(cubeAv_v5(U_i,P_i,theta_i,layout,layout,turb,RHO=1.225,K=K,u_lim=None,ex=False,Ct_op=2,WAV_CT=WAV_CT,Cp_op=1))
-        pow_j,_ = result[0]
-        time = timings.best
-    else:
-        pow_j = cubeAv_v5(U_i,P_i,theta_i,layout,layout,turb,RHO=1.225,K=K,u_lim=None,ex=False,Ct_op=2,WAV_CT=WAV_CT,Cp_op=1)
-        time = np.NaN
-    
-    return pow_j,time
-
-def ntag_timed_aep(Fourier_coeffs3_PA,layout,WAV_CT,K,turb,timed=True):
-    from AEP3_3_functions import ntag_PA_v03
-    if timed:
-        result = []
-        timings = %timeit -o -q result.append(ntag_PA_v03(Fourier_coeffs3_PA,layout,layout,turb,WAV_CT,K))
-        pow_j,_ = result[0]
-        time = timings.best
-    else:
-        pow_j,_ = ntag_PA_v03(Fourier_coeffs3_PA,layout,layout,turb,WAV_CT,K)
-        time = np.NaN
-    return pow_j,time
-
-def caag_timed_aep(Fourier_coeffs_noCp_PA,layout,WAV_CT,K,turb,timed=True):
-    from AEP3_3_functions import caag_PA_v03
-    if timed:
-        result = []
-        timings = %timeit -o -q result.append(caag_PA_v03(Fourier_coeffs_noCp_PA,layout,layout,turb,WAV_CT,K))
-        pow_j,_ = result[0]
-        time = timings.best
-    else:
-        pow_j,_ = caag_PA_v03(Fourier_coeffs_noCp_PA,layout,layout,turb,WAV_CT,K)
-        time = np.NaN
-    return pow_j,time
-
-K = 0.03
-U_LIM = None
-NO_BINS = 72 #number of bins in the wind rose
-theta_i = np.linspace(0,360,NO_BINS,endpoint=False)
-
-ROWS = 3
-COLS = 3
-
-from turbines_v01 import iea_10MW
+from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
 site_n = [2,3,6] #[2,3,6] #[6,8,10] are the tricky ones
 layout_n = [5,6,7]
 rot = [0,0,0]
+#generate the contourf data
+from utilities.helpers import simple_Fourier_coeffs,get_floris_wind_rose,get_WAV_pp,rectangular_layout,fixed_rectangular_domain
 
-X,Y,plot_points = rectangular_domain(EXTENT,r=RESOLUTION)
+X,Y,plot_points = fixed_rectangular_domain(EXTENT,r=RESOLUTION)
 
 layout,powj_a,powj_b,powj_c,powj_d,powj_e,powj_f= [empty2dPyarray(ROWS, COLS) for _ in range(7)]  #2d python arrays
 time_a,time_c,time_d,time_e = [np.zeros((ROWS,COLS)) for _ in range(4)]
@@ -140,41 +40,82 @@ Uwff_b = np.zeros((ROWS,COLS,plot_points.shape[0]))
 
 U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
-#generate the contourf data
-from AEP3_3_functions import num_F_v02,simple_Fourier_coeffs_v01
-for i in range(ROWS): #for each wind rose
-    U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
-    _,Fourier_coeffs3_PA = simple_Fourier_coeffs_v01(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
-    _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs_v01((P_i[:,i]*U_i[:,i]*len(P_i[:,i]))/(2*np.pi))
-    
-    WAV_CT = np.sum(turb.Ct_f(U_i[:,i])*turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3/np.sum(turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3))
+# from utilities.timed_aep_funcs import slow_numerical_aep,fast_numerical_aep,ntag_timed_aep,caag_timed_aep
 
-    for j in range(COLS): #for each layout
-        timed = True
+import timeit
+from pathlib import Path
+from floris.tools import FlorisInterface
+import numpy as np
+
+def auto_timeit(func, *args, **kwargs):
+    number = 1  # Start with one iteration
+    while True:
+        # Time how long it takes for 'number' iterations
+        elapsed_time = timeit.timeit(lambda: func(*args, **kwargs), number=number)
+        if elapsed_time >= 0.2:  # e.g., if it takes longer than 200 ms, stop
+            break
+        number *= 10  # Increase the number of iterations by an order of magnitude
+
+    # Now use 'repeat' to run the test multiple times
+    times = timeit.repeat(lambda: func(*args, **kwargs), number=number, repeat=7)
+
+    return min(times)/number  # Return the best time
+
+def floris_timed_aep(U_i, P_i, theta_i, layout, turb, wake=True, timed=True):
+    settings_path = Path("utilities") / "floris_settings.yaml"
+    fi = FlorisInterface(settings_path)
+    fi.reinitialize(wind_directions=theta_i, wind_speeds=U_i, time_series=True, layout_x=turb.D*layout[:,0], layout_y=turb.D*layout[:,1])
+
+    time = np.NaN  # Initialize to NaN
+    if wake:
+        if timed:
+            # Use the auto_timeit function to time fi.calculate_wake
+            time = auto_timeit(fi.calculate_wake)
+        else:
+            fi.calculate_wake()
+    else:  # no wake (sanity check) calculation
+        fi.calculate_no_wake()
+
+    aep_array = fi.get_turbine_powers()
+    pow_j = np.sum(P_i[:, None, None]*aep_array, axis=0)  # weight average using probability
+    return pow_j/(1*10**6), time
+
+for i in range(1): #for each wind rose (site)
+    U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
+    #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
+    _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
+    #For caag, the fourier coeffs are found from Pi*Ui
+    _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs((P_i[:,i]*U_i[:,i]*len(P_i[:,i]))/(2*np.pi))
+    
+    WAV_CT1 = get_WAV_pp(U_i[:,i],P_i[:,i],turb,turb.Ct_f)
+    wav_Ct = np.sum(turb.Ct_f(U_i[:,i])*turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3/np.sum(turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3)) #weight averaged Ct (there are many ways)
+
+    for j in range(1): #for each layout
+        timed = True #timing toggle
         layout[i][j] = rectangular_layout(layout_n[j],SPACING,rot[j])
         #floris aep (the reference)
         powj_a[i][j],time_a[i][j] = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,timed=timed)
 
-        #numerical aep (for flow field and as a reference)
-        powj_b[i][j],Uwff_b[i,j,:] = slow_numerical_aep(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],plot_points,turb,K)
+        # #numerical aep (for flow field and as a reference)
+        # powj_b[i][j],Uwff_b[i,j,:] = slow_numerical_aep(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],plot_points,turb,K)
 
-        #numerical aep Ct(average), Cp(global)
-        powj_c[i][j],time_c[i][j] = fast_numerical_aep(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],turb,K)
+        # #numerical aep Ct(average), Cp(global)
+        # powj_c[i][j],time_c[i][j] = fast_numerical_aep(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],turb,K,timed=timed)
 
-        #ntag (average of the cube) analytical aep
-        powj_d[i][j],time_d[i][j] = ntag_timed_aep(Fourier_coeffs3_PA,layout[i][j],WAV_CT,K,turb,timed=timed)
+        # #ntag (No cross Terms Analytical Gaussian) aep
+        # powj_d[i][j],time_d[i][j] = ntag_timed_aep(Fourier_coeffs3_PA,layout[i][j],turb,K,wav_Ct,timed=timed)
 
-        #caag (cube of the average) analytical aep
-        powj_e[i][j],time_e[i][j] = caag_timed_aep(Fourier_coeffs_noCp_PA,layout[i][j],WAV_CT,K,turb,timed=timed)
-        
-        #floris NO WAKE aep
-        powj_f[i][j],_ = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False)      
+        # #caag (cube of the average) analytical aep
+        # powj_e[i][j],time_e[i][j] = caag_timed_aep(Fourier_coeffs_noCp_PA,layout[i][j],turb,K,wav_Ct,timed=timed)
+    
+        # #floris NO WAKE aep
+        # powj_f[i][j],_ = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False)      
         
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
 #%%
 #ntag (average of the cube) analytical aep
 d = Fourier_coeffs3_PA
-a,b = ntag_timed_aep(d,c,WAV_CT,K,turb,timed=True)
+a,b = ntag_timed_aep(d,c,wav_Ct,K,turb,timed=True)
 print(np.sum(a))
 print(f"{si_fm(b)}s")
 
@@ -321,10 +262,10 @@ aep6,_,Uff = num_F_v02(U_i1,P_i1,np.deg2rad(theta1_i),
                      turb,
                      K=K,
                      u_lim=None,
-                     Ct_op=1,WAV_CT=WAV_CT,
+                     Ct_op=1,WAV_CT=wav_Ct,
                      Cp_op=1,cross_ts=True,ex=True)
 print("reference: {}".format(np.sum(aep6)))
-WAV_CT = np.sum(turb.Ct_f(U_i1)*turb.Cp_f(U_i1)*P_i1*U_i1**3/np.sum(turb.Cp_f(U_i1)*P_i1*U_i1**3))
+wav_Ct = np.sum(turb.Ct_f(U_i1)*turb.Cp_f(U_i1)*P_i1*U_i1**3/np.sum(turb.Cp_f(U_i1)*P_i1*U_i1**3))
 WAV_CP = np.sum(turb.Cp_f(U_i1)*turb.Cp_f(U_i1)*P_i1*U_i1**3/np.sum(turb.Cp_f(U_i1)*P_i1*U_i1**3))
 # WAV_CT = np.sum(turb.Ct_f(U_i1)*P_i1)
 
@@ -334,18 +275,18 @@ aep7,_,Uff = num_F_v02(U_i1,P_i1,np.deg2rad(theta1_i),
                      turb,
                      K=K,
                      u_lim=None,
-                     Ct_op=3,WAV_CT=WAV_CT,
+                     Ct_op=3,WAV_CT=wav_Ct,
                      Cp_op=3,WAV_CP=WAV_CP,cross_ts=False,ex=False)
 print("est ntag: {}".format(np.sum(aep7)))#
 from AEP3_3_functions import ntag_PA_v03
 _,fc_PA_d = simple_Fourier_coeffs_v01((turb.Cp_f(U_i1)*P_i1*(U_i1**3)*len(P_i1))/(2*np.pi))
-aep8,_ = ntag_PA_v03(fc_PA_d,layout1,layout1,turb,WAV_CT,K)
+aep8,_ = ntag_PA_v03(fc_PA_d,layout1,layout1,turb,wav_Ct,K)
 print("actual ntag: {}".format(np.sum(aep8)))
 turb = iea_10MW()
 _,fc_PA_a = simple_Fourier_coeffs_v01((P_i1*(U_i1**4)*len(P_i1))/(2*np.pi))
 _,fc_PA_b = simple_Fourier_coeffs_v01((P_i1*(U_i1**3)*len(P_i1))/(2*np.pi))
 m,c = m_opt,c_opt
-aep12,_ = ntag_PA_TS_v01(fc_PA_a,fc_PA_b,m,c,layout1,layout1,turb,WAV_CT,K)
+aep12,_ = ntag_PA_TS_v01(fc_PA_a,fc_PA_b,m,c,layout1,layout1,turb,wav_Ct,K)
 print("anly new: {}".format(np.sum(aep12)))
 
 #%% arsing around with Taylor series expansion
@@ -429,7 +370,7 @@ ax.plot(x1, fit_line, color='r', label='Fitted Line')
 # Add legend to the plot
 ax.legend()
              
-aep11,_ = ntag_PA_v03(Fourier_coeffs3_PA,layout1,layout1,turb,WAV_CT,K)
+aep11,_ = ntag_PA_v03(Fourier_coeffs3_PA,layout1,layout1,turb,wav_Ct,K)
 
 print("aep11: {}".format(np.sum(aep11)))
 #%%
@@ -447,7 +388,7 @@ aep6,_,Uff = num_F_v02(U_i1,P_i1,np.deg2rad(theta1_i),
                      turb,
                      K=K,
                      u_lim=None,
-                     Ct_op=1,WAV_CT=WAV_CT,
+                     Ct_op=1,WAV_CT=wav_Ct,
                      Cp_op=1,cross_ts=True,ex=False)
 print("aep6: {}".format(np.sum(aep6)))
 
@@ -456,30 +397,30 @@ aep10,_ = cubeAv_v5(U_i1,P_i1,theta1_i,
               layout1, 
               turb,
               RHO=1.225,K=K,
-              u_lim=None,ex=True,Ct_op=3,WAV_CT=WAV_CT)
+              u_lim=None,ex=True,Ct_op=3,WAV_CT=wav_Ct)
 
 print("aep10: {}".format(np.sum(aep10)))
 _,fc_PA_1 = simple_Fourier_coeffs_v01(turb.Cp_f(U_i1)*(P_i1*(U_i1**3)*len(P_i1))/(2*np.pi))
-aep11,_ = ntag_PA_v03(fc_PA_1,layout1,layout1,turb,WAV_CT,K)
+aep11,_ = ntag_PA_v03(fc_PA_1,layout1,layout1,turb,wav_Ct,K)
 print("aep11: {}".format(np.sum(aep11)))
 _,fc_PA_2 = simple_Fourier_coeffs_v01((P_i1*(U_i1**3)*len(P_i1))/(2*np.pi))
 # m1 = 0
 WAV_CP = np.sum(P_i1*turb.Cp_f(U_i1))
 m1 = m
 c1 = c
-aep12,_ = ntag_PA_TS_v01(fc_PA_2,m1,c1,layout1,layout1,turb,WAV_CT,K)
+aep12,_ = ntag_PA_TS_v01(fc_PA_2,m1,c1,layout1,layout1,turb,wav_Ct,K)
 print("new aep12: {}".format(np.sum(aep12)))
 _,fc_PA_3 = simple_Fourier_coeffs_v01(WAV_CP*(P_i1*(U_i1**3)*len(P_i1))/(2*np.pi))
-aep13,_ = ntag_PA_v03(fc_PA_3,layout1,layout1,turb,WAV_CT,K)
+aep13,_ = ntag_PA_v03(fc_PA_3,layout1,layout1,turb,wav_Ct,K)
 print("ntag WAV_CP aep13: {}".format(np.sum(aep13)))
 _,fc_PA_5 = simple_Fourier_coeffs_v01(turb.Cp_f(U_i1)*(P_i1*(U_i1**3)*len(P_i1))/(2*np.pi))
-aep15,_ = ntag_PA_v03(fc_PA_5,layout1,layout1,turb,WAV_CT,K)
+aep15,_ = ntag_PA_v03(fc_PA_5,layout1,layout1,turb,wav_Ct,K)
 print("ntag aep15: {}".format(np.sum(aep15)))
 from AEP3_3_functions import caag_PA_v03
 _,fc_PA_4 = simple_Fourier_coeffs_v01((P_i1*(U_i1)*len(P_i1))/(2*np.pi))
-aep14,_ = caag_PA_v03(fc_PA_4,layout1,layout1,turb,WAV_CT,K,Cp_op=2,WAV_CP=WAV_CP)
+aep14,_ = caag_PA_v03(fc_PA_4,layout1,layout1,turb,wav_Ct,K,Cp_op=2,WAV_CP=WAV_CP)
 print("FYP WAVED aep14: {}".format(np.sum(aep14)))
-aep15,_ = caag_PA_v03(fc_PA_4,layout1,layout1,turb,WAV_CT,K,Cp_op=1)
+aep15,_ = caag_PA_v03(fc_PA_4,layout1,layout1,turb,wav_Ct,K,Cp_op=1)
 print("FYP aep15: {}".format(np.sum(aep15)))
 #%%
 import matplotlib.pyplot as plt

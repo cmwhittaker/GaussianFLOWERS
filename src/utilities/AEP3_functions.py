@@ -1,44 +1,6 @@
 #%% These are all the wake calculating functions 
 import numpy as np
 
-def ntag_v02(r_jk,theta_jk,cjd3_Fterms,CT,K,A,rho=1.225):
-    #"No cross Term Analytical Gaussian" - the performance can probably be increased with a small amount of optimisation
-    #CT is constant across all wind directions :(
-
-    a_0,a_n,b_n = cjd3_Fterms
-
-    EP = 0.2*np.sqrt((1+np.sqrt(1-CT))/(2*np.sqrt(1-CT)))
-
-    #auxilaries
-    n = np.arange(1,a_n.size+1,1)
-    sigma = np.where(r_jk!=0,(K*r_jk+EP)/r_jk,0)
-    lim = (np.sqrt(CT/8)-EP)/K
-    lim = np.where(lim<0.01,0.01,lim)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(CT/(8*(K*r_jk+EP)**2)))))
-
-    #modify some dimensions ready for broadcasting
-    n_b = n[None,None,:]  
-    sigma_b = sigma[:,:,None]
-    a_n = a_n[None,None,:]
-    b_n = b_n[None,None,:]
-    theta_b = theta_jk[:,:,None] + np.pi #wake is downstream
-
-    def term(a):
-        cnst_term = ((np.sqrt(2*np.pi*a)*sigma)/(a))*(sqrt_term**a)
-        mfs = (a_0/2 + np.sum(np.exp(-((sigma_b*n_b)**2)/(2*a))*(a_n*np.cos(n_b*theta_b)+b_n*np.sin(n_b*theta_b)),axis=-1)) #modified Fourier series
-        return np.sum(cnst_term*mfs,axis=-1)
-    
-    #alpha is the 'energy' content of the wind
-    alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) - term(3)
-    
-    if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation
-        pow_j = (0.5*A*rho*alpha)/(1*10**6)
-        aep = np.sum(pow_j)
-    else: #farm wake visualisation
-        pow_j = np.nan
-        aep = np.nan
-    return alpha,pow_j,aep
-
 def ntag_PA_v02(r_jk,theta_jk,cjd3_PA_terms,WAV_CT,K,A,rho=1.225):
     #"No cross Term Analytical Gaussian" 
     # "Phase Amplitude (Fourier Series) form" (more computationally efficient!)
@@ -77,78 +39,6 @@ def ntag_PA_v02(r_jk,theta_jk,cjd3_PA_terms,WAV_CT,K,A,rho=1.225):
         aep = np.nan
     return alpha,pow_j,aep
 
-def ntag_CE_v01(r_jk,theta_jk,c_n,a_0,CT,K,A,rho=1.225):
-    #"No cross Term Analytical Gaussian" -
-    #"COMPLEX EXPONENTIAL" form
-    # the performance can probably be increased with a small amount of optimisation
-    #CT is constant across all wind directions :(
-
-    EP = 0.2*np.sqrt((1+np.sqrt(1-CT))/(2*np.sqrt(1-CT)))
-    
-    if len(c_n)%2 == 0: #EVEN
-        n = np.arange(-len(c_n)/2,len(c_n)//2,1)
-    else: #ODD
-        n = np.arange(-(len(c_n)-1)/2,(len(c_n)-1)/2+1,1)
-
-    sigma = np.where(r_jk!=0,(K*r_jk+EP)/r_jk,0)
-    lim = (np.sqrt(CT/8)-EP)/K
-    lim = np.where(lim<0.01,0.01,lim)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(CT/(8*(K*r_jk+EP)**2)))))
-
-    #modify some dimensions ready for broadcasting
-    n_b = n[None,None,:]  
-    sigma_b = sigma[:,:,None]
-    c_n = c_n[None,None,:]
-    theta_b = theta_jk[:,:,None] + np.pi #wake is downstream
-
-    def term(a):
-        cnst_term = (np.sqrt(2*np.pi*a)*sigma/(a))*(sqrt_term**a)
-        arg = -(sigma_b*n_b)**2/(2*a) +1j*n_b*theta_b
-        mfs = np.sum(c_n * np.exp(arg),axis=-1).astype('float64')
-        return np.sum(cnst_term*mfs,axis=-1)
-    
-    #alpha is the 'energy' content of the wind
-    alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) - term(3)
-    if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation
-        pow_j = (0.5*A*rho*alpha)/(1*10**6)
-        aep = np.sum(pow_j)
-    else: #farm wake visualisation
-        pow_j = np.nan
-        aep = np.nan
-    return alpha,pow_j,aep
-
-def cubeAv_v4(r_jk,theta_jk,theta_i,U_i,P_i,ct_f,cp_f,K,A,rho=1.225):
-    #(DEPRECIATED!)
-    #Pretty sure this is wrong ...
-    #(or atleast I can't properly verify it!)
-    #calculates the (average) wake velocity and farm aep discretely
-    def deltaU_by_Uinf(r,theta,ct,K):
-        ep = 0.2*np.sqrt((1+np.sqrt(1-ct))/(2*np.sqrt(1-ct)))
-
-        U_delta_by_U_inf = (1-np.sqrt(1-(ct/(8*(K*r*np.sin(theta)+ep)**2))))*(np.exp(-(r*np.cos(theta))**2/(2*(K*r*np.sin(theta)+ep)**2)))
-
-        lim = (np.sqrt(ct/8)-ep)/K #this is the y value of the invalid region, can be negative depending on Ct
-        lim = np.where(lim<0.01,0.01,lim) #may sure it's always atleast 0.01 (stop self-produced wake) (this should be >0 but there is numerical artifacting in rsin(theta) )
-        deltaU_by_Uinf = np.where(r*np.sin(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
-        return deltaU_by_Uinf
-
-    #I sometimes use this function to find the wake layout, so find relative posistions to plot points not the layout 
-    #when plot_points = layout it finds wake at the turbine posistions
-    theta_ijk = theta_jk[None,:,:] - theta_i[:,None,None] + 3*np.pi/2 # I don't know
-
-    r_ijk = np.repeat(r_jk[None,:,:],len(theta_i),axis=0)
-    ct_ijk = ct_f(U_i)[...,None,None]*np.ones((r_jk.shape[0],r_jk.shape[1]))[None,...] #bad way of repeating
-    Uw_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf(r_ijk,theta_ijk,ct_ijk,K),axis=2))
-    if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation
-        pow_ij = P_i[:,None]*(0.5*A*rho*cp_f(Uw_ij)*Uw_ij**3)/(1*10**6) #this IS slower, but needed for illustrations
-        aep = np.sum(pow_ij)
-        flow_field = np.nan
-    else: #farm wake visualisation
-        pow_ij = np.nan
-        aep = np.nan
-        flow_field = np.sum(cp_f(Uw_ij)*P_i[:,None]*Uw_ij**3,axis=0)
-    return flow_field,np.sum(pow_ij,axis=0),aep
-
 def ca_ag_v02(r_jk,theta_jk,cjd_Fterms_noCP,Cp_f,CT,K,A,rho=1.225):
     
     #"Cubed Average Analytical Gaussian"
@@ -185,55 +75,17 @@ def ca_ag_v02(r_jk,theta_jk,cjd_Fterms_noCP,Cp_f,CT,K,A,rho=1.225):
         aep = np.nan
     return alpha,pow_j,aep
 
-def ca_cp_ag_v01(r_jk,theta_jk,cjd_Fterms,Cp_f,CT,K,A,rho=1.225):
-    # (effectively depreciated)
-
-    #"Cubed Average Analytical Gaussian"
-    #INCLUDING the power coefficient
-
-    #This approximation doesn't work very well!
-
-    a_0,a_n,b_n = cjd_Fterms
-
-    EP = 0.2*np.sqrt((1+np.sqrt(1-CT))/(2*np.sqrt(1-CT)))
-
-    #auxilaries
-    n = np.arange(1,a_n.size+1,1)
-    sigma = np.where(r_jk!=0,(K*r_jk+EP)/r_jk,0)
-    lim = (np.sqrt(CT/8)-EP)/K
-    lim = np.where(lim<0.01,0.01,lim) #limit always posistive
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(CT/(8*(K*r_jk+EP)**2)))))
-    cnst_term = sqrt_term*np.sqrt(2*np.pi)*sigma
-
-    #modify some dimensions ready for broadcasting
-    n_b = n[None,None,:]    
-    sigma_b = sigma[:,:,None]
-    a_n = a_n[None,None,:]
-    b_n = b_n[None,None,:]
-    theta_b = theta_jk[:,:,None] + np.pi #wake is downstream
-
-    mfs = (a_0/2 + np.sum(np.exp(-((sigma_b*n_b)**2)/(2))*(a_n*np.cos(n_b*theta_b)+b_n*np.sin(n_b*theta_b)),axis=-1)) #modified Fourier series
-    alpha = 2*np.pi*a_0/2 - np.sum(cnst_term*mfs,axis=-1)  
-    #alpha is the linear wake velocity
-    
-    print("alpha: {}".format(alpha))
-
-    if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation
-        pow_j = (0.5*A*rho*alpha**3)/(1*10**6)
-        #per-turbine power generation
-        aep = np.sum(pow_j)
-    else: #farm wake visualisation
-        pow_j = np.nan
-        aep = np.nan
-    return alpha,pow_j,aep
-
 def num_F_v02(U_i,P_i,theta_i,
               layout,
               plot_points, #this is the comp domain
               turb,
-              RHO=1.225,K=0.025,
-              u_lim=None,Ct_op=True,WAV_CT=None,cross_ts=True,ex=True,Cp_op=True,WAV_CP=None,cube_term=True):
-    #version 2! 
+              K,
+              RHO=1.225,
+              u_lim=None,
+              Ct_op=True,WAV_CT=None,
+              Cp_op=True,WAV_CP=None,
+              cross_ts=True,ex=True,cube_term=True):
+    
     #this now finds the wakes of the turbines "in turn" so that it can support a thrust coefficient based on local inflow: Ct(U_w) not Ct(U_\infty) as previously.
     if np.any(np.abs(theta_i) > 10): #this is needed ...
         raise ValueError("Did you give num_F_v02 degrees?")
@@ -357,7 +209,13 @@ def num_F_v02(U_i,P_i,theta_i,
 
 from utilities.helpers import gen_local_grid
 
-def ntag_PA_v03(cjd3_PA_terms,layout1,layout2,turb,WAV_CT,K,RHO=1.225):
+def ntag_PA_v03(Fourier_coeffs3_PA,
+                layout1,
+                layout2,
+                turb,
+                K,
+                wav_Ct,
+                RHO=1.225):
     #"No cross Term Analytical Gaussian" 
     # "Phase Amplitude (Fourier Series) form" (more computationally efficient!)
     #CT is constant across all wind directions :(
@@ -365,16 +223,16 @@ def ntag_PA_v03(cjd3_PA_terms,layout1,layout2,turb,WAV_CT,K,RHO=1.225):
 
     r_jk,theta_jk = gen_local_grid(layout1,layout2)
 
-    a_0,A_n,Phi_n = cjd3_PA_terms
+    a_0,A_n,Phi_n = Fourier_coeffs3_PA
 
-    EP = 0.2*np.sqrt((1+np.sqrt(1-WAV_CT))/(2*np.sqrt(1-WAV_CT)))
+    EP = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
     #auxilaries
     n = np.arange(1,A_n.size+1,1)
     sigma = np.where(r_jk!=0,(K*r_jk+EP)/r_jk,0)
-    lim = (np.sqrt(WAV_CT/8)-EP)/K
+    lim = (np.sqrt(wav_Ct/8)-EP)/K
     lim = np.where(lim<0.01,0.01,lim)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(WAV_CT/(8*(K*r_jk+EP)**2)))))
+    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2)))))
 
     #modify some dimensions ready for broadcasting
     n_b = n[None,None,:]  
@@ -403,7 +261,14 @@ def ntag_PA_v03(cjd3_PA_terms,layout1,layout2,turb,WAV_CT,K,RHO=1.225):
         aep = np.nan
     return pow_j,alpha
 
-def caag_PA_v03(cjd_noCp_PA_terms,layout1,layout2,turb,WAV_CT,K,Cp_op=1,WAV_CP=None,RHO=1.225):
+def caag_PA_v03(cjd_noCp_PA_terms,
+                layout1,
+                layout2,
+                turb,
+                K,
+                wav_Ct,
+                Cp_op=1,WAV_CP=None,
+                RHO=1.225):
     #"Cubed average analytical Gaussian" (the old way)
     # "Phase Amplitude (Fourier Series) form" (more computationally efficient!)
     #CT is constant across all wind directions :(
@@ -413,14 +278,14 @@ def caag_PA_v03(cjd_noCp_PA_terms,layout1,layout2,turb,WAV_CT,K,Cp_op=1,WAV_CP=N
 
     a_0,A_n,Phi_n = cjd_noCp_PA_terms
 
-    EP = 0.2*np.sqrt((1+np.sqrt(1-WAV_CT))/(2*np.sqrt(1-WAV_CT)))
+    EP = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
     #auxilaries
     n = np.arange(1,A_n.size+1,1)
     sigma = np.where(r_jk!=0,(K*r_jk+EP)/r_jk,0)
-    lim = (np.sqrt(WAV_CT/8)-EP)/K
+    lim = (np.sqrt(wav_Ct/8)-EP)/K
     lim = np.where(lim<0.01,0.01,lim)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(WAV_CT/(8*(K*r_jk+EP)**2)))))
+    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2)))))
     cnst_term = sqrt_term*np.sqrt(2*np.pi)*sigma
 
     #modify some dimensions ready for broadcasting
@@ -455,17 +320,16 @@ def cubeAv_v5(U_i,P_i,theta_i,
               layout1,
               layout2, 
               turb,
-              RHO=1.225,K=0.025,
-              u_lim=None,ex=True,Ct_op=1,WAV_CT=None,Cp_op=1):
-    #discrete numerical convolution
-    # effectively num_F_v02 with 
-    # OPTIONS:
-    # Ct_op = 1 or 2 
-    # ex=True or False
-    # u_lim 
-    # FIXED
-    # cross_ts=True
-    # Cp_op = 2
+              K,
+              RHO=1.225,
+              u_lim=None,
+              Ct_op=2,WAV_CT=None,
+              Cp_op=1,  
+              ex=True):
+    # a vectorised/ optimised version of num_F_v02
+    # this means it can be compared in terms of performance AND accuracy
+    # vectorisation restricts choice of Ct_op to global or weight averaged (2 or 3)
+    # there's no option to neglect the cross terms
 
     def deltaU_by_Uinf_f(r,theta,Ct,K):
         ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct)))
@@ -492,8 +356,8 @@ def cubeAv_v5(U_i,P_i,theta_i,
     theta_ijk = theta_jk[None,:,:] - theta_i[:,None,None]
     r_ijk =  np.broadcast_to(r_jk[None,:,:],theta_ijk.shape) 
     if Ct_op == 1:
-        raise ValueError("Local Ct is not supported by this function")
-    elif Ct_op == 2: #base global inflow
+        raise ValueError("Local Ct is not supported by this function") #this has to be done in turn
+    elif Ct_op == 2: #global Ct *(based on freestream inflow speed)
         ct_ijk = np.broadcast_to(turb.Ct_f(U_i)[...,None,None],r_ijk.shape)
     elif Ct_op == 3:
         if WAV_CT == None:
@@ -504,8 +368,9 @@ def cubeAv_v5(U_i,P_i,theta_i,
     
     if Cp_op != 1:
         raise ValueError("Only option 1 is supported for Cp ")
+    #power coefficient based on local inflow
     
-    Uwt_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf_f(r_ijk,theta_ijk,ct_ijk,K),axis=2))
+    Uwt_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf_f(r_ijk,theta_ijk,ct_ijk,K),axis=2)) #wake velocity at turbine locations
     pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(turb.Cp_f(Uwt_ij)*Uwt_ij**3))/(1*10**6)
     return pow_j,Uwt_ij
 
