@@ -23,14 +23,23 @@ x,y = 2,3
 %timeit f(x,y)
 
 #%% learning unpacking
-def e(x,y,z=2):
+def e(x,y,z=2,w=None):
     #some calculations
-    return (x+y)*z
+    return x+y+z+w
 
 def f(*args,feedback=True,**kwargs):
-    #some wrapper function
+    #some wrapper functionw
     if feedback:
         print("feedback")   
-    return e(*args,**kwargs)
+    return e(*args,w=1,**kwargs)
 
-f(2,3,z=2,feedback="True")
+f(1,1,z=0,feedback=True)
+
+
+#%% 
+def function(flag=True):
+    if flag:
+        return 1
+    return 2
+
+print(function(flag=False))

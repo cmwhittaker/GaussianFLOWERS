@@ -74,16 +74,16 @@ else: #otherwise easterly
 xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,xlims,ylims = rectangular_domain(layout,xr=300)
 
-from utilities.AEP3_functions import num_F_v02
+from utilities.AEP3_functions import num_Fs
 #reference AEP first (Ct_op == 1 means Cp(U_w) done in turn)
-aep_a,Uwt_ja,Uwff_ja= num_F_v02(U_i,P_i,theta_i,
+aep_a,Uwt_ja,Uwff_ja= num_Fs(U_i,P_i,theta_i,
                        layout,
                        plot_points,
                        turb,
                        RHO=1.225,K=0.025,
                        u_lim=U_LIM,Ct_op=1,cross_ts=True,ex=True,Cp_op=1)
 #then Ct_op == 3 means \overline(C_t), this was found based on the combined rose
-aep_b,Uwt_jb,_      = num_F_v02(U_i,P_i,theta_i,
+aep_b,Uwt_jb,_      = num_Fs(U_i,P_i,theta_i,
                        layout,
                        plot_points, 
                        turb,
