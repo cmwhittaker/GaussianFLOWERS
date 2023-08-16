@@ -179,7 +179,7 @@ def num_Fs(U_i,P_i,theta_i,
     else: #EXcluding cross terms (soat = Sum over Axis Two (third axis!)
         Uwt_ij_cube = (U_i[:,None]**3)*(1 - 3*soat(DUt_ijk) + 3*soat(DUt_ijk**2) - cube_term*soat(DUt_ijk**3)) #optionally neglect the cubic term with the cube_term option
 
-    #then there are a few ways of finding the power coefficient
+    #then there are a few ways of finding the power coefficient / calculating power
     if Cp_op == 1: #power coeff based on local wake velocity
         Cp_ij = turb.Cp_f(Uwt_ij)
         pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(Cp_ij*Uwt_ij_cube),axis=0)/(1*10**6)
@@ -192,7 +192,7 @@ def num_Fs(U_i,P_i,theta_i,
         pow_j = 0.5*turb.A*RHO*wav_Cp*np.sum(P_i[:,None]*(Uwt_ij**3),axis=0)/(1*10**6)
     elif Cp_op == 4: #the old way (found analytical version in FYP)
         if Ct_op != 3:
-            raise ValueError("This is impossible analytically, pick a different combination")
+            raise ValueError("This has no analyical equivalent Ct_op should probably be 3")
         alpha = np.sum(P_i[:,None]*Uwt_ij,axis=0) #the weight average velocity field
         pow_j = 0.5*turb.A*RHO*turb.Cp_f(alpha)*alpha**3/(1*10**6)
     elif Cp_op == 5: 
@@ -290,7 +290,7 @@ def vect_num_F(U_i,P_i,theta_i,
     #power coefficient based on local inflow
     
     Uwt_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf_f(r_ijk,theta_ijk,ct_ijk,K),axis=2)) #wake velocity at turbine locations
-    pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(turb.Cp_f(Uwt_ij)*Uwt_ij**3))/(1*10**6)
+    pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(turb.Cp_f(Uwt_ij)*Uwt_ij**3),axis=0)/(1*10**6)
     return pow_j,Uwt_ij
 
 from utilities.helpers import gen_local_grid
@@ -357,8 +357,7 @@ def ntag_PA(Fourier_coeffs3_PA,
     return pow_j,alpha
 
 def caag_PA(Fourier_coeffs_noCp_PA,
-            layout1,
-            layout2,
+            layout1,layout2,
             turb,
             K,
             wav_Ct,

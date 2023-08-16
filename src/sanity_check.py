@@ -22,15 +22,15 @@
 # The only mistake in coordinate system would be theta = -theta + 180 (this would produce the same power). 
 # Since in both cases the power generation is the same (note that 2. would be 0.5*P_a + 0.5*P_c if the first coordinate system was wrong), the coordinate system must be correct
 # 
-# The power calculations were performed 1) by hand 2) using simplified functions 3) 
-# actual aep functions. All methods agree, so I consider the functions validated.
+# The power calculations were performed 1) by hand 2) using simplified functions 3) using the actual functions. They all agree
 
+import sys
+if hasattr(sys, 'ps1'):
+    #if it's interactive, re-import modules every run
+    %load_ext autoreload
+    %autoreload 2
 
-#%% another simple sanity check
-%load_ext autoreload
-%autoreload 2
-
-U_inf = 13
+U_inf = 13 #if this is lower, the other turbines can be in the invalid zone
 
 import numpy as np
 from utilities.turbines import iea_10MW
@@ -119,20 +119,74 @@ for m in multipliers:
       print("num_f aep4: {}".format(np.sum(aep4)))
       print("ntag  aep5: {}".format(np.sum(aep5)))
 print("the two *should* converge ")
+#%%and for a reasonably fine, realistc, wind rose (72 bins), the results should be close
+from utilities.helpers import get_floris_wind_rose
+U_i,P_i = get_floris_wind_rose(6)
+theta_i = np.linspace(0,360,72,endpoint=False)
 
-#%% testing the new cubeAv_v5 against num_F_v02
-#layout = np.array(((0,0),(0,5),(5,0),(5,5)))
-from AEP3_3_functions import cubeAv_v5,gen_local_grid_v01C
-WAV_CT = np.sum(turb.Ct_f(U_i)*P_i)
-#this should be the same as:
-aep8,_,_ = num_F_v02(U_i,P_i,theta_i,layout,layout,turb,K=K,Ct_op=3,WAV_CT=WAV_CT,Cp_op=1,cross_ts=True,ex=True)
-print("aep8: {}".format(np.sum(aep8)))
+a1,_,_ = num_Fs(U_i,P_i,np.deg2rad(theta_i),
+                layout,layout,
+                turb,
+                K,
+                Ct_op=3,wav_Ct=wav_Ct,
+                Cp_op=2,
+                cross_ts=False,ex=False,cube_term=False)
+_,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/(2*np.pi))
+a2,_ = ntag_PA(cjd3_PA_terms,
+               layout,layout,
+               turb,
+               K,
+               wav_Ct)
+print("a1: {}".format(np.sum(a1)))
+print("a2: {}".format(np.sum(a2)))
+#they are reasonably close
+#%% num_Fs and vect_num_F should agree 
+from utilities.AEP3_functions import vect_num_F
+aep6,_,_ = num_Fs(U_i,P_i,theta_i,
+                  layout,layout,
+                  turb,
+                  K,
+                  Ct_op=2,wav_Ct=None,
+                  Cp_op=1,
+                  cross_ts=True,ex=True,cube_term=True)
 
-aep10,_ = cubeAv_v5(U_i,P_i,theta_i,
-              layout,
-              layout, 
-              turb,
-              RHO=1.225,K=K,
-              u_lim=None,ex=True,Ct_op=3,WAV_CT=WAV_CT)
+aep7,_ = vect_num_F(U_i,P_i,theta_i,
+                      layout,layout, 
+                      turb,
+                      K,
+                      Ct_op=2,wav_Ct=None,
+                      Cp_op=1,  
+                      ex=True)
 
-print("aep10: {}".format(np.sum(aep10)))
+print("aep6: {}".format(np.sum(aep6)))
+print("aep7: {}".format(np.sum(aep7)))
+
+#%% num_Fs and caag should converge
+from utilities.AEP3_functions import caag_PA
+multipliers = [1,2,10]
+for m in multipliers:
+      theta_i,U_i, P_i = new_wr1(m*16)
+      wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
+
+      #numerical with Ct_op=3,Cp_op=4,cross_ts=True,ex=False,(cube_term=True) is the discrete convolution equivalent of caag
+      aep8,_,_ = num_Fs(U_i,P_i,theta_i,
+                        layout,layout,
+                        turb,
+                        K,
+                        Ct_op=3,wav_Ct=wav_Ct,
+                        Cp_op=4,
+                        cross_ts=True,ex=False,cube_term=True)
+            
+      _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs((P_i*U_i*len(P_i))/(2*np.pi))
+      aep9,_ = caag_PA(Fourier_coeffs_noCp_PA,
+                 layout,layout,
+                 turb,
+                 K,
+                 wav_Ct,
+                 RHO=1.225)
+
+      print(f'with {str(m*36)} bins:')
+      print("num_F: {}".format(np.sum(aep8)))
+      print("caag : {}".format(np.sum(aep9)))
+
+print("the two *should* converge ")
