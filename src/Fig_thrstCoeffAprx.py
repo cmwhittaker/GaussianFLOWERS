@@ -88,7 +88,7 @@ aep_b,Uwt_jb,_      = num_Fs(U_i,P_i,theta_i,
                        plot_points, 
                        turb,
                        RHO=1.225,K=0.025,
-                       u_lim=U_LIM,Ct_op=3,WAV_CT=WAV_CT,cross_ts=True,ex=True,Cp_op=1)
+                       u_lim=U_LIM,Ct_op=3,wav_Ct=WAV_CT,cross_ts=True,ex=True,Cp_op=1)
 
 #the rest is a load leg work plotting the results
 

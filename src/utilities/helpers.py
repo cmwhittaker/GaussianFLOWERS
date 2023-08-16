@@ -104,3 +104,9 @@ def get_floris_wind_rose(site_n):
 #signed percentage error
 def pce(exact,approx):
     return 100*(approx-exact)/exact
+
+def empty2dPyarray(rows,cols): #create empty 2d python array
+    return [[0 for j in range(cols)] for i in range(rows)]
+
+def empty3dPyarray(rows,cols,lays): #create empty 3d python array
+    return [[[0 for k in range(lays)] for j in range(cols)] for i in range(rows)]

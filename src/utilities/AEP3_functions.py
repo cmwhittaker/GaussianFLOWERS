@@ -7,8 +7,8 @@ def num_Fs(U_i,P_i,theta_i,
            K,
            RHO=1.225,
            u_lim=None,
-           Ct_op=1,WAV_CT=None,
-           Cp_op=1,WAV_CP=None,
+           Ct_op=1,wav_Ct=None,
+           Cp_op=1,wav_Cp=None,
            cross_ts=True,ex=True,cube_term=True):
       #this now finds the wakes of the turbines "in turn" so that it can support a thrust coefficient based on local inflow: Ct(U_w) not Ct(U_\infty) as previously.
     if np.any(np.abs(theta_i) > 10): #this is needed ...
@@ -75,11 +75,11 @@ def num_Fs(U_i,P_i,theta_i,
             elif Ct_op == 2: #base on global inflow
                 Ct = turb.Ct_f(U_i[i]) 
             elif Ct_op == 3:
-                if WAV_CT == None:
+                if wav_Ct == None:
                     raise ValueError("For option 3 provide WAV_CT")
-                Ct = WAV_CT
+                Ct = wav_Ct
                 if flag:
-                    print(f"using WAV_CT: {WAV_CT:.2f}")
+                    print(f"using WAV_CT: {wav_Ct:.2f}")
                     flag = False
             else:
                 raise ValueError("No Ct option selected")
@@ -107,9 +107,9 @@ def num_Fs(U_i,P_i,theta_i,
         Cp_ij = turb.Cp_f(U_i)[:,None]
         pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(Cp_ij*Uwt_ij_cube),axis=0)/(1*10**6)
     elif Cp_op == 3: #use weight averaged Cp
-        if WAV_CP is None:
-            raise ValueError("For Cp option 3 provide WAV_CP")
-        pow_j = 0.5*turb.A*RHO*WAV_CP*np.sum(P_i[:,None]*(Uwt_ij**3),axis=0)/(1*10**6)
+        if wav_Cp is None:
+            raise ValueError("For Cp option 3 provide wav_Cp")
+        pow_j = 0.5*turb.A*RHO*wav_Cp*np.sum(P_i[:,None]*(Uwt_ij**3),axis=0)/(1*10**6)
     elif Cp_op == 4: #the old way (found analytical version in FYP)
         alpha = np.sum(P_i[:,None]*Uwt_ij,axis=0) #the weight average velocity field
         pow_j = 0.5*turb.A*RHO*turb.Cp_f(alpha)*alpha**3/(1*10**6)
@@ -249,7 +249,7 @@ def caag_PA(cjd_noCp_PA_terms,
             turb,
             K,
             wav_Ct,
-            Cp_op=1,WAV_CP=None,
+            Cp_op=1,wav_Cp=None,
             RHO=1.225):
     #"Cubed average analytical Gaussian" (the old way)
     # "Phase Amplitude (Fourier Series) form" (more computationally efficient!)
@@ -284,9 +284,9 @@ def caag_PA(cjd_noCp_PA_terms,
     if Cp_op == 1:
         Cp = turb.Cp_f(alpha)
     elif Cp_op == 2:
-        if WAV_CP == None:
+        if wav_Cp == None:
             raise ValueError("For option 2 provide WAV_CP")
-        Cp = WAV_CP
+        Cp = wav_Cp
     else:
         raise ValueError("No Cp option selected")
 

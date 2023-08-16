@@ -1,253 +1,158 @@
-#%% Figure to show the effect of things on aep accuracy
-#Now added data to show where the error is coming from 
+#%% Produce the 3x3 wind roses(sites)xlayouts figure that compares the accuracy of Gaussian FLOWERS to a floris reference
+# there are 6 methods being evaluated at once (most will be removed before publishing)
+# this "with errors" version adds an additional panel in the bottom left that shows
+# the contribution of each of the assumptions on the final accuracy (assuming that they are independent - which is semi-true)
 
-#rows: effect of changes to the wind rose
-#colums: effect of increasing the size of the farm
+#(rows: effect of changes to the wind rose
+#colums: effect of increasing the size of the farm)
 
-#the plotting is based on Fig_XtermAprx_v03, the data generation is based on Fig_thrstCoeffAprx_v07
-
-#% A figure to show the effect of neglecting the cross terms in the product of the sums
 #%% get data to plot
-%load_ext autoreload
-%autoreload 2
+import sys
+if hasattr(sys, 'ps1'):
+    #if it's interactive, re-import modules every run
+    %load_ext autoreload
+    %autoreload 2
+
 import numpy as np
-SAVE_FIG = False
-SPACING = 7
-INVALID_R = None
-RESOLUTION = 100
-EXTENT = 30
-flag = 1
-
-def rectangular_domain(extent,r=200):
-    X,Y = np.meshgrid(np.linspace(-extent,extent,r),np.linspace(-extent,extent,r))
-    return X,Y,np.column_stack((X.reshape(-1),Y.reshape(-1)))
-
-def rectangular_layout(no_xt,s,rot):
-    low = (no_xt)/2-0.5
-    xt = np.arange(-low,low+1,1)*s
-    yt = np.arange(-low,low+1,1)*s
-    Xt,Yt = np.meshgrid(xt,yt)
-    Xt,Yt = [_.reshape(-1) for _ in [Xt,Yt]]
-    rot_Xt = Xt * np.cos(rot) + Yt * np.sin(rot)
-    rot_Yt = -Xt * np.sin(rot) + Yt * np.cos(rot) 
-    layout = np.column_stack((rot_Xt.reshape(-1),rot_Yt.reshape(-1)))
-    return layout#just a single layout for now
+SAVE_FIG = True
+SPACING = 7 #turbine spacing normalised by rotor DIAMETER
+U_LIM = 3 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
+RESOLUTION = 100 #number of x/y points in contourf meshgrid
+EXTENT = 30 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
+K = 0.03 #expansion parameter for the Gaussian model
+NO_BINS = 72 #number of bins in the wind rose
+ROWS = 3 #number of sites
+COLS = 3 #number of layout variations
 
 def empty2dPyarray(rows,cols): #create empty 2d python array
     return [[0 for j in range(cols)] for i in range(rows)]
 
-from floris.tools import WindRose
-def get_floris_wind_rose(site_n):
-    fl_wr = WindRose()
-    folder_name = "WindRoseData_D/site" +str(site_n)
-    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None)
-    wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
-    wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
-    U_i = wr.ws
-    P_i = wr.freq_val
-    return np.array(U_i),np.array(P_i)
-
-import time
-def floris_timed_aep(U_i,P_i,theta_i,layout,turb,wake=True,timed=True):
-    from floris.tools import FlorisInterface
-    fi = FlorisInterface("floris_settings.yaml")
-    fi.reinitialize(wind_directions=theta_i, wind_speeds=U_i, time_series=True,layout_x=turb.D*layout[:,0],layout_y=turb.D*layout[:,1])
-    if wake:
-        if timed:
-            timings = %timeit -o -q fi.calculate_wake()
-            time = timings.best
-        else:
-            fi.calculate_wake()
-            time = np.NaN
-    else:
-        fi.calculate_no_wake()
-        time = np.NaN
-    aep_array = fi.get_turbine_powers() #happy days, we can go from here
-    pow_j = np.sum(P_i[:,None,None]*aep_array,axis=0)
-    return pow_j/(1*10**6),time
-
-def slow_numerical_aep(U_i,P_i,theta_i,layout,plot_points,turb,K):
-    pow_j,_,Uwff_ja= num_F_v02(U_i,P_i,theta_i,
-                     layout,
-                     plot_points,
-                     turb,
-                     K=K,
-                     u_lim=U_LIM,
-                     Ct_op=1,WAV_CT=WAV_CT,
-                     Cp_op=1,cross_ts=True,ex=False)
-    return pow_j,Uwff_ja
-
-def fast_numerical_aep(U_i,P_i,theta_i,layout,turb,K,timed=True):
-    from AEP3_3_functions import cubeAv_v5
-    if timed:
-        result = []
-        timings = %timeit -o -q result.append(cubeAv_v5(U_i,P_i,theta_i,layout,layout,turb,RHO=1.225,K=K,u_lim=None,ex=False,Ct_op=2,WAV_CT=WAV_CT,Cp_op=1))
-        pow_j,_ = result[0]
-        time = timings.best
-    else:
-        pow_j,_ = cubeAv_v5(U_i,P_i,theta_i,layout,layout,turb,RHO=1.225,K=K,u_lim=None,ex=False,Ct_op=2,WAV_CT=WAV_CT,Cp_op=1)
-        time = np.NaN
-    
-    return pow_j,time
-
-def ntag_timed_aep(Fourier_coeffs3_PA,layout,WAV_CT,K,turb,timed=True):
-    from AEP3_3_functions import ntag_PA_v03
-    if timed:
-        result = []
-        timings = %timeit -o -q result.append(ntag_PA_v03(Fourier_coeffs3_PA,layout,layout,turb,WAV_CT,K))
-        pow_j,_ = result[0]
-        time = timings.best
-    else:
-        pow_j,_ = ntag_PA_v03(Fourier_coeffs3_PA,layout,layout,turb,WAV_CT,K)
-        time = np.NaN
-    return pow_j,time
-
-def caag_timed_aep(Fourier_coeffs_noCp_PA,layout,WAV_CT,K,turb,timed=True):
-    from AEP3_3_functions import caag_PA_v03
-    if timed:
-        result = []
-        timings = %timeit -o -q result.append(caag_PA_v03(Fourier_coeffs_noCp_PA,layout,layout,turb,WAV_CT,K))
-        pow_j,_ = result[0]
-        time = timings.best
-    else:
-        pow_j,_ = caag_PA_v03(Fourier_coeffs_noCp_PA,layout,layout,turb,WAV_CT,K)
-        time = np.NaN
-    return pow_j,time
-
 def find_errors(U_i,P_i,theta_i,layout,plot_points,turb,K):
-    #this finds the errors ...
+    # this finds the errors resulting from each of the assumptions, they are:
+    # 1. Ct_error: Approximating Ct(U_w) (local) with a constant \overline{C_t}
+    # 2. Cp_error1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
+    # 3. Cx1_error: Cros terms approximation Approximating ( \sum x )^n with ( \sum x^n )
+    # 4. SA_error: small angle approximation of the Gaussian wake model (sin(\theta) \approx \theta etc...)    
+
     #WAV_Ct shouldn't really be global
-    from AEP3_3_functions import num_F_v02,pce
+    from utilities.AEP3_functions import num_Fs
+    from utilities.helpers import pce
     
     def simple_aep(Ct_op=1,Cp_op=1,cross_ts=True,ex=True,cube_term=True):
-        pow_j,_,_= num_F_v02(U_i,P_i,theta_i,
+        pow_j,_,_= num_Fs(U_i,P_i,theta_i,
                      layout,
                      plot_points,
                      turb,
                      K=K,
                      u_lim=None,
-                     Ct_op=Ct_op,WAV_CT=WAV_CT,
-                     Cp_op=Cp_op,WAV_CP=WAV_CP,
+                     Ct_op=Ct_op,wav_Ct=wav_Ct,
+                     Cp_op=Cp_op,wav_Cp=None,
                      cross_ts=cross_ts,ex=ex,cube_term=cube_term)
         return np.sum(pow_j)
-    exact = simple_aep()
-    print("ref_aep: {}".format(exact))
-    Ct_error = pce(exact,simple_aep(Ct_op=3))
-    Cp_error1 = pce(exact,simple_aep(Cp_op=2))
-    Cx1_error = pce(exact,simple_aep(cross_ts=False))
-    SA_error = pce(exact,simple_aep(ex=False))
-
-    Cp_error2 = pce(exact,simple_aep(Cp_op=3))
+    exact = simple_aep() #the default options represent no assumptions takene
+    Ct_error = pce(exact,simple_aep(Ct_op=3)) #Ct_op 3 is a constant Ct
+    Cp_error1 = pce(exact,simple_aep(Cp_op=2)) #Cp_op 2 is a global Cp
+    Cx1_error = pce(exact,simple_aep(cross_ts=False)) #neglect cross terms
+    SA_error = pce(exact,simple_aep(ex=False)) #ex:"exact" =False so use small angle approximation
     
-    return (Ct_error,Cp_error1,Cx1_error,SA_error,Cp_error2)
+    return (Ct_error,Cp_error1,Cx1_error,SA_error)
 
-K = 0.03
-U_LIM = 3
-NO_BINS = 72 #number of bins in the wind rose
-theta_i = np.linspace(0,360,NO_BINS,endpoint=False)
+theta_i = np.linspace(0,360,NO_BINS,endpoint=False) 
 
-ROWS = 3
-COLS = 3
-
-from turbines_v01 import iea_10MW
+from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
-site_n = [2,3,6] #[2,3,6] #[6,8,10] are the tricky ones
-layout_n = [5,7,8]
-rot = [0,np.deg2rad(10),0] # [0,0,np.deg2rad(10)]
+site_n = [2,3,6] #[6,8,10] are also tricky 
+layout_n = [5,6,7] # update EXTENT to increase size of window if increasing this
+rot = [0,0,0]
+#generate the contourf data
+from utilities.helpers import simple_Fourier_coeffs,get_floris_wind_rose,get_WAV_pp,rectangular_layout,fixed_rectangular_domain
 
-X,Y,plot_points = rectangular_domain(EXTENT,r=RESOLUTION)
+X,Y,plot_points = fixed_rectangular_domain(EXTENT,r=RESOLUTION)
 
-layout,powj_a,powj_b,powj_c,powj_d,powj_e,powj_f,powj_g,powj_h= [empty2dPyarray(ROWS, COLS) for _ in range(9)]  #2d python arrays
+layout,powj_a,powj_b,powj_c,powj_d,powj_e,powj_f= [empty2dPyarray(ROWS, COLS) for _ in range(7)]  #2d python arrays
 time_a,time_c,time_d,time_e = [np.zeros((ROWS,COLS)) for _ in range(4)]
-errors = np.zeros((ROWS,COLS,5))
+
 Uwff_b = np.zeros((ROWS,COLS,plot_points.shape[0]))
 
 U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
-#generate the contourf data
-from AEP3_3_functions import num_F_v02,simple_Fourier_coeffs_v01
-for i in range(ROWS): #for each wind rose
-    if i==0:
-        #first rose is an impulse with 10ms
-        U_i[:,i] = 10*np.ones_like(theta_i)
-        P_i[:,i] = np.zeros_like(theta_i)
-        P_i[54,i] = 1
-    elif i==1:
-        U_i[:,i] = 10*np.ones_like(theta_i)
-        P_i[:,i] = np.zeros_like(theta_i)
-        P_i[54,i] = 1
-    elif i==2:
-        # U_i[:,i] = 15*np.ones_like(theta_i)
-        # P_i[:,i] = np.zeros_like(theta_i)
-        # P_i[54,i] = 1
-        U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
+errors = np.zeros((ROWS,COLS,4))
+
+from utilities.timing_helpers import floris_timed_aep,adaptive_timeit
+from utilities.AEP3_functions import num_Fs,vect_num_F,ntag_PA,caag_PA
+
+for i in range(ROWS): #for each wind rose (site)
+    U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
+    #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
+    _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
+    #For caag, the fourier coeffs are found from Pi*Ui
+    _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs((P_i[:,i]*U_i[:,i]*len(P_i[:,i]))/(2*np.pi))
     
-    # U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
-
-    _,Fourier_coeffs3_PA = simple_Fourier_coeffs_v01(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
-    _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs_v01((P_i[:,i]*U_i[:,i]*len(P_i[:,i]))/(2*np.pi))
-    
-    WAV_CT = np.sum(turb.Ct_f(U_i[:,i])*turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3/np.sum(turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3))
-
-    WAV_CP = np.sum(turb.Cp_f(U_i[:,i])*turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3/np.sum(turb.Cp_f(U_i[:,i])*P_i[:,i]*U_i[:,i]**3))
-
-    # WAV_CP = 1
-    # turb.Cp_f = lambda x: np.ones_like(x)
+    wav_Ct = get_WAV_pp(U_i[:,i],P_i[:,i],turb,turb.Ct_f) #weight ct by power production
 
     for j in range(COLS): #for each layout
-        timed = False
-        layout[i][j] = rectangular_layout(layout_n[j],SPACING,rot[i])
-        # #floris aep (the reference)
-        powj_a[i][j],time_a[i][j] = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,timed=timed)
-
-        #numerical aep (for flow field and as a reference)
-        powj_b[i][j],Uwff_b[i,j,:] = slow_numerical_aep(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],plot_points,turb,K)
-
+        timed = True #timing toggle
+        layout[i][j] = rectangular_layout(layout_n[j],SPACING,rot[j])
+        
+        #find the errors due to each assumption (numerically)
         errors[i,j,:] = find_errors(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],plot_points,turb,K)
 
-        #numerical aep Ct(average), Cp(global)
-        powj_c[i][j],time_c[i][j] = fast_numerical_aep(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],turb,K,timed=timed)
+        #floris aep (the reference)
+        powj_a[i][j],time_a[i][j] = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,timed=timed)
 
-        #ntag (average of the cube) analytical aep
-        powj_d[i][j],time_d[i][j] = ntag_timed_aep(Fourier_coeffs3_PA,layout[i][j],WAV_CT,K,turb,timed=timed)
+        #non-vectorised numerical aep (flow field+aep)
+        aep_func_b = lambda: num_Fs(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),
+                                      layout[i][j],plot_points,
+                                      turb,K,
+                                      u_lim=None,
+                                      Ct_op=1, #local Ct
+                                      Cp_op=1, #local Cp
+                                      cross_ts=True,ex=False)
+        powj_b[i][j],_,Uwff_b[i,j,:] = aep_func_b() #no timing, performance is not comparable because it's non-vectorised
+
+        #vectorised numerical aep (aep+time)
+        aep_func_c = lambda: vect_num_F(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),
+                                       layout[i][j],layout[i][j],
+                                       turb,
+                                       K,
+                                       u_lim=U_LIM,
+                                       Ct_op=2, #global Ct
+                                       Cp_op=1, #local Cp
+                                       ex=True)
+        (powj_c[i][j],_),time_c[i][j] = adaptive_timeit(aep_func_c,timed=timed)
+
+        #ntag (No cross Terms Analytical Gaussian) (aep+time)
+        aep_func_d = lambda: ntag_PA(Fourier_coeffs3_PA,
+                                         layout[i][j],
+                                         layout[i][j],
+                                         turb,
+                                         K, 
+                                         #(Ct_op = 3 cnst) 
+                                         #(Cp_op = 2 global )    
+                                         wav_Ct)
+        (powj_d[i][j],_),time_d[i][j] = adaptive_timeit(aep_func_d,timed=timed)
 
         #caag (cube of the average) analytical aep
-        powj_e[i][j],time_e[i][j] = caag_timed_aep(Fourier_coeffs_noCp_PA,layout[i][j],WAV_CT,K,turb,timed=timed)
-        
-        #floris NO WAKE aep
-        powj_f[i][j],_ = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False)      
-
-        powj_g[i][j],_,_ = num_F_v02(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),
-                          layout[i][j],
-                          plot_points,
-                          turb,
-                          K=K,
-                          u_lim=U_LIM,
-                          Ct_op=3,WAV_CT=WAV_CT,
-                          Cp_op=4,WAV_CP=WAV_CP,
-                          cross_ts=True,ex=False,cube_term=True)
-        
-        powj_h[i][j],_,_ = num_F_v02(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),
-                          layout[i][j],
-                          plot_points,
-                          turb,
-                          K=K,
-                          u_lim=U_LIM,
-                          Ct_op=3,WAV_CT=WAV_CT,
-                          Cp_op=5,WAV_CP=WAV_CP,
-                          cross_ts=False,ex=False,cube_term=True)
+        aep_func_e = lambda: caag_PA(Fourier_coeffs_noCp_PA,
+                                         layout[i][j],
+                                         layout[i][j],
+                                         turb,
+                                         K,
+                                         #(Ct_op = 3 cnst) 
+                                         #(Cp_op = 2 *local-ish)
+                                         wav_Ct,
+                                         Cp_op=1,wav_Cp=None)
+        # *local based on the weight averaged wake velocity 
+        (powj_e[i][j],_),time_e[i][j] = adaptive_timeit(aep_func_e,timed=timed)
+    
+        # #floris NO WAKE aep
+        powj_f[i][j],_ = floris_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False,timed=False)   
         
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
-#%%
-#ntag (average of the cube) analytical aep
-d = Fourier_coeffs3_PA
-a,b = ntag_timed_aep(d,c,WAV_CT,K,turb,timed=True)
-print(np.sum(a))
-print(f"{si_fm(b)}s")
 
-#%% sanity check
-n,m = 0,0
+#%% simple no wake sanity check
+n,m = 2,2
 Nt =  layout[n][m].shape[0]
 alpha = ((0.5*1.225*turb.A)/(1*10**6))
 no_wake_p = Nt*alpha*np.sum(P_i[:,n]*turb.Cp_f(U_i[:,n])*U_i[:,n]**3)
@@ -274,8 +179,9 @@ def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
     ax.spines['polar'].set_visible(False)
     return None
 
-from AEP3_3_functions import si_fm
-from matplotlib import cm
+from utilities.plotting_funcs import si_fm
+from utilities.helpers import pce
+
 def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None)):
     ax = fig.add_subplot(gs[2*i,j+1])
 
@@ -308,19 +214,15 @@ def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,Non
     aep_b = np.sum(powj_b[i][j]) #analytical AEP directly
     aep_c = np.sum(powj_c[i][j]) #AEP from cubed weight average velocity
     aep_d = np.sum(powj_d[i][j]) #no wake reference
-    aep_e = np.sum(powj_e[i][j]) #
-    aep_f = np.sum(powj_f[i][j]) #
-    aep_g = np.sum(powj_g[i][j]) #no wake reference
-    aep_h = np.sum(powj_h[i][j]) #no wake reference
+    aep_e = np.sum(powj_e[i][j]) #no wake reference
+    aep_f = np.sum(powj_f[i][j]) #no wake reference
 
-    top_left_text = f'''A:{aep_a:.2f}MW(ref) in {si_fm(time_a[i][j])}s
-    B:{aep_b:.2f}MW({pce(aep_a,aep_b):+.1f}\%) 
-    C:{aep_c:.2f}MW({pce(aep_a,aep_c):+.1f}\%) in {si_fm(time_c[i][j])}s({time_a[i][j]/time_c[i][j]:.2f})
-    D:{aep_d:.2f}MW({pce(aep_a,aep_d):+.1f}\%) in {si_fm(time_d[i][j])}s({time_a[i][j]/time_d[i][j]:.2f})
-    E:{aep_e:.2f}MW({pce(aep_a,aep_e):+.1f}\%) in {si_fm(time_e[i][j])}s({time_a[i][j]/time_e[i][j]:.2f})
-    F:{aep_f:.2f}MW({pce(aep_a,aep_f):+.1f}\%)
-    G:{aep_g:.2f}MW({pce(aep_a,aep_g):+.1f}\%)
-    H:{aep_h:.2f}MW({pce(aep_a,aep_h):+.1f}\%)'''
+    top_left_text = f'''{aep_a:.2f}MW(ref) in {si_fm(time_a[i][j])}s
+    {aep_b:.2f}MW({pce(aep_a,aep_b):+.1f}\%) 
+    {aep_c:.2f}MW({pce(aep_a,aep_c):+.1f}\%) in {si_fm(time_c[i][j])}s({time_a[i][j]/time_c[i][j]:.2f})
+    {aep_d:.2f}MW({pce(aep_a,aep_d):+.1f}\%) in {si_fm(time_d[i][j])}s({time_a[i][j]/time_d[i][j]:.2f})
+    {aep_e:.2f}MW({pce(aep_a,aep_e):+.1f}\%) in {si_fm(time_e[i][j])}s({time_a[i][j]/time_e[i][j]:.2f})
+    {aep_f:.2f}MW({pce(aep_a,aep_f):+.1f}\%)'''
 
     ax.text(0.05,0.95,top_left_text,color='black',transform=ax.transAxes,va='top',ha='left',fontsize=4,bbox=props)
 
@@ -370,36 +272,30 @@ from matplotlib.colors import LinearSegmentedColormap
 colors = ["black", "white"]
 cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
 
-from AEP3_3_functions import pce
 for i in range(ROWS): 
     #first column is the wind rose
     y1 = U_i[:,i]*P_i[:,i]
     nice_polar_plot(fig,gs[2*i,0],np.deg2rad(theta_i),y1,"$P(\\theta)U(\\theta)$")
     for j in range(COLS): #then onto the contours
-        #Z2 = pce(powj_a[i][j], powj_d[i][j])
-        Z2 = powj_d[i][j]
+        Z2 = pce(powj_a[i][j], powj_d[i][j])
         xt,yt = layout[i][j][:,0],layout[i][j][:,1]
         cf = nice_composite_plot_v03(fig,gs,i,j,Uwff_b[i][j].reshape(X.shape),X,Y,Z2,xt,yt,errors[i,j,:],cont_lim=cont_lim) 
 
 ill_cb(gs[6,1:],cont_lim) #'illustrative' colourbar on bottom row
 
 if SAVE_FIG:
+    site_str = ''.join(str(x) for x in site_n)
+    layout_str = ''.join(str(x) for x in layout_n)    
+
     from pathlib import Path
-    path_plus_name = "JFM_report_v02/Figures/"+Path(__file__).stem+".png"
-    plt.savefig(path_plus_name,dpi='figure',format='png',bbox_inches='tight')
-    print("figure saved")
+
+    current_file_path = Path(__file__)
+    fig_dir = current_file_path.parent.parent / "extra evaluations"
+    fig_name = f"Fig_FarmEval_withErrors_{site_str}_{layout_str}.png"
+    path_plus_name = fig_dir / fig_name
+    
+    plt.savefig(path_plus_name, dpi='figure', format='png', bbox_inches='tight')
+
+    print(f"figure saved as {fig_name}")
 
 plt.show()
-
-#%%
-turb = iea_10MW()
-a,b,c = num_F_v02(U_i[:,i],P_i[:,i],theta_i,
-                     layout[i][j],
-                     plot_points,
-                     turb,
-                     K=K,
-                     u_lim=None,
-                     Ct_op=3,WAV_CT=WAV_CT,
-                     Cp_op=5,WAV_CP=WAV_CP,
-                     cross_ts=False,ex=False,cube_term=False)
-np.sum(a)

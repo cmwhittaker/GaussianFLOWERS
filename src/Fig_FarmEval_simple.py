@@ -1,4 +1,5 @@
 #%% Produce the 3x3 wind roses(sites)xlayouts figure that compares the accuracy of Gaussian FLOWERS to a floris reference
+#there are 6 methods being evaluated at once (most will be removed before publishing)
 
 #(rows: effect of changes to the wind rose
 #colums: effect of increasing the size of the farm)
