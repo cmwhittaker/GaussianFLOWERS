@@ -5,7 +5,8 @@
 import numpy as np
 import timeit
 def adaptive_timeit(func,timed=True):
-    #func must take no arguments
+    # this times func() (can't have any arguments) over ~ 4-8 secs and returns a single-execution run time in seconds
+    
     result = func()
     if timed is not True: #don't bother timing
         return result,np.NaN

@@ -3,7 +3,6 @@
 #(rows: effect of changes to the wind rose
 #colums: effect of increasing the size of the farm)
 
-
 #%% get data to plot
 import sys
 if hasattr(sys, 'ps1'):
@@ -31,7 +30,7 @@ from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
 site_n = [2,3,6] #[6,8,10] are also tricky 
-layout_n = [5,6,7]
+layout_n = [5,6,7] # update EXTENT to increase size of window if increasing this
 rot = [0,0,0]
 #generate the contourf data
 from utilities.helpers import simple_Fourier_coeffs,get_floris_wind_rose,get_WAV_pp,rectangular_layout,fixed_rectangular_domain
@@ -144,7 +143,7 @@ def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
 
 from utilities.plotting_funcs import si_fm
 from utilities.helpers import pce
-from matplotlib import cm
+
 def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,cont_lim=(None,None)):
     ax = fig.add_subplot(gs[2*i,j+1])
 

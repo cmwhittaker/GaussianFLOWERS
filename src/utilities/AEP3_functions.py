@@ -7,12 +7,12 @@ def num_Fs(U_i,P_i,theta_i,
            K,
            RHO=1.225,
            u_lim=None,
-           Ct_op=True,WAV_CT=None,
-           Cp_op=True,WAV_CP=None,
+           Ct_op=1,WAV_CT=None,
+           Cp_op=1,WAV_CP=None,
            cross_ts=True,ex=True,cube_term=True):
       #this now finds the wakes of the turbines "in turn" so that it can support a thrust coefficient based on local inflow: Ct(U_w) not Ct(U_\infty) as previously.
     if np.any(np.abs(theta_i) > 10): #this is needed ...
-        raise ValueError("Did you give num_F_v02 degrees?")
+        raise ValueError("Did you give num_F degrees?")
     
     def deltaU_by_Uinf_f(r,theta,Ct,K):
         ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct)))
@@ -43,7 +43,7 @@ def num_Fs(U_i,P_i,theta_i,
         sort_index = np.argsort(-layout[:, 1]) #sort index, with furthest upwind first
         return sort_index
     
-    def soat(a): #Sum over Axis Two
+    def soat(a): #Sum over Axis Two (superposistion sum)
         return np.sum(a,axis=2)
 
     Xt,Yt = layout[:,0],layout[:,1]
@@ -90,6 +90,7 @@ def num_Fs(U_i,P_i,theta_i,
             DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K)
             Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over k
     
+    num_Fs.DUff_ijk = DUff_ijk #(slightly hacky) this is for the cross-term plot (i don't want to change the signature just for this one use case)
     #calculate power at the turbine location
     if cross_ts: #INcluding cross terms
         if cube_term == False:

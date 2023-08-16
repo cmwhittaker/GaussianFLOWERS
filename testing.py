@@ -43,3 +43,9 @@ def function(flag=True):
     return 2
 
 print(function(flag=False))
+
+#%%
+
+list = [1,2,3,4]
+for a in list:
+    print()
