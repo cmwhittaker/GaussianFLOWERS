@@ -1,3 +1,13 @@
+#%%This is my validation methodology 
+
+# 1a. I construct a simple farm and find the aep by hand (hand calcs should be attached). The layout is constructed in such a way that if I made a mistake in the coordinate transform (which I found the hardest process to understand) then the aep would be different
+# 1b. I write some simple functions that find the aep 
+# 1c. Then check that num_Fs is giving the same result
+# 2a. num_Fs with certain settings implements ntag ("Gaussian FLOWERS") numerically. I check that for the simple wind layout in 1a the two results converge. (I still need to do this by hand)
+# 2b. for a "realistic" wind rose (using floris to parse a wind rose data folder), I check that numF agrees with ntag.
+# 3a. num_Fs with certain settings implements caag (Gaussian equivalent of "Jensen FLOWERS") numerically. I check that for the simple wind layout in 1a the two results converge. (I still need to do this by hand)
+# 3b. for a "realistic" wind rose (using floris to parse a wind rose data folder), I check that numF agrees with caag.
+
 #SANITY CHECK POWER GENERATION
 #Consider the farm layout:
 #
