@@ -34,7 +34,7 @@ site_n = [2,3,6] #[6,8,10] are also tricky
 layout_n = [5,6,7] # update EXTENT to increase size of window if increasing this
 rot = [0,0,0]
 #generate the contourf data
-from utilities.helpers import simple_Fourier_coeffs,get_floris_wind_rose,get_WAV_pp,rectangular_layout,fixed_rectangular_domain
+from utilities.helpers import simple_Fourier_coeffs,get_floris_wind_rose,get_WAV_pp,rectangular_layout,fixed_rectangular_domain,adaptive_timeit
 
 X,Y,plot_points = fixed_rectangular_domain(EXTENT,r=RESOLUTION)
 
@@ -45,8 +45,7 @@ Uwff_b = np.zeros((ROWS,COLS,plot_points.shape[0]))
 
 U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
-from utilities.timing_helpers import floris_timed_aep,adaptive_timeit
-from utilities.AEP3_functions import num_Fs,vect_num_F,ntag_PA,caag_PA
+from utilities.AEP3_functions import floris_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA
 
 for i in range(ROWS): #for each wind rose (site)
     U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])

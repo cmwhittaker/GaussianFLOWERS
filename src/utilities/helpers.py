@@ -34,7 +34,7 @@ def rectangular_domain(layout,xpad=7,ypad=7,xr=100,yr=100):
     return xx,yy,np.column_stack((xx.reshape(-1),yy.reshape(-1))),xlims,ylims
 
 def fixed_rectangular_domain(extent,r=200):
-    #rectilinear grid shape (r**2,2) over rectange centered on (0,0) with side lengths 2*extent
+    #rectilinear grid shape (r**2,2) over rectangle centered on (0,0) with side lengths 2*extent
     xx,yy = np.meshgrid(np.linspace(-extent,extent,r),np.linspace(-extent,extent,r))
     return xx,yy,np.column_stack((xx.reshape(-1),yy.reshape(-1)))
 
@@ -110,3 +110,26 @@ def empty2dPyarray(rows,cols): #create empty 2d python array
 
 def empty3dPyarray(rows,cols,lays): #create empty 3d python array
     return [[[0 for k in range(lays)] for j in range(cols)] for i in range(rows)]
+
+import numpy as np
+import timeit
+def adaptive_timeit(func,timed=True):
+    # this times func() (can't have any arguments) over ~ 4-8 secs and returns a single-execution run time in seconds
+
+    result = func() #get the actual result of the function
+    if timed is not True: #don't bother timing
+        return result,np.NaN
+
+    #find the correct number to take 0.75-1.5 secs
+    number = 5  # 5 iterations to start
+    while True:
+        # Time how long it takes for 'number' iterations
+        elapsed_time = timeit.timeit(lambda: func(), number=number)
+        if elapsed_time >= 0.75: 
+            break
+        number *= 2  # Double number of iterations
+
+    # Now use 'repeat' to run the test multiple times
+    times = timeit.repeat(lambda: func(), number=number, repeat=5)
+    #this should take ~4-8 secs
+    return result,min(times)/number  # Return the best time

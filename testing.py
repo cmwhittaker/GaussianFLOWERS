@@ -49,3 +49,9 @@ print(function(flag=False))
 list = [1,2,3,4]
 for a in list:
     print()
+
+#%%
+def f(x):
+    print("f has been run")
+    return None
+g = lambda: f(1)
