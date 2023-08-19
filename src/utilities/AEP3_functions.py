@@ -94,7 +94,7 @@ def num_Fs(U_i,P_i,theta_i,
         raise ValueError("Did you give num_F degrees?")
     
     def deltaU_by_Uinf_f(r,theta,Ct,K):
-        ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct))) #initial expansion width: eq.6 + 19 in Bastankah 2014 (0.2 was found to be a better fit than 0.25 in a subsequent paper)
+        ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct))) #initial expansion width: (eq.6 + 19 +21 in Bastankah 2014 - don't forget eq21!)
         if u_lim != None: #override the limit with the user defined radius
             lim = u_lim
         else:
@@ -165,10 +165,10 @@ def num_Fs(U_i,P_i,theta_i,
                 raise ValueError("Ct_op is not supported")
 
             DUt_ijk[i,:,k] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K)
-            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion
+            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion for each turbine (turbine U_ws)
             
             DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K)
-            Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over superposistion
+            Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over superposistion for eah turbine (flow field)
     
     num_Fs.DUff_ijk = DUff_ijk #(slightly hacky) this is for the cross-term plot (i don't want to change the signature just for this one use case)
     
@@ -271,7 +271,7 @@ def vect_num_F(U_i,P_i,theta_i,
 
     #I sometimes use this function to find the wake field for plotting, so find relative posistions to plot points not the layout 
     #when layout2 = plot_points it finds wake at the turbine posistions
-    r_jk,theta_jk = gen_local_grid(layout1,layout2) #find theta relative to each turbine and each turbine in superposistion
+    r_jk,theta_jk = find_relative_coords(layout1,layout2) #find theta relative to each turbine and each turbine in superposistion
     theta_ijk = theta_jk[None,:,:] - theta_i[:,None,None] #find theta when wind direction varies
     r_ijk =  np.broadcast_to(r_jk[None,:,:],theta_ijk.shape) 
     if Ct_op == 1:
@@ -293,7 +293,7 @@ def vect_num_F(U_i,P_i,theta_i,
     pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(turb.Cp_f(Uwt_ij)*Uwt_ij**3),axis=0)/(1*10**6)
     return pow_j,Uwt_ij
 
-from utilities.helpers import gen_local_grid
+from utilities.helpers import find_relative_coords
 def ntag_PA(Fourier_coeffs3_PA,
             layout1,layout2,
             turb,
@@ -318,7 +318,7 @@ def ntag_PA(Fourier_coeffs3_PA,
         pow_j (nt,) : aep of induvidual turbines
         alpha (nt,2) | (plot_points,2) : "energy content" (Cp*P*U**3) of the wind at turbine locations or plot_points
     """
-    r_jk,theta_jk = gen_local_grid(layout1,layout2) #find relative posistions
+    r_jk,theta_jk = find_relative_coords(layout1,layout2) #find relative posistions
 
     a_0,A_n,Phi_n = Fourier_coeffs3_PA
 
@@ -381,7 +381,7 @@ def caag_PA(Fourier_coeffs_noCp_PA,
         alpha (nt,2) | (plot_points,2) : "energy content" (P*U) of the wind at turbine locations or plot_points
     """
 
-    r_jk,theta_jk = gen_local_grid(layout1,layout2)
+    r_jk,theta_jk = find_relative_coords(layout1,layout2)
 
     a_0,A_n,Phi_n = Fourier_coeffs_noCp_PA
 

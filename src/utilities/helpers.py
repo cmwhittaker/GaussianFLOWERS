@@ -38,7 +38,7 @@ def fixed_rectangular_domain(extent,r=200):
     xx,yy = np.meshgrid(np.linspace(-extent,extent,r),np.linspace(-extent,extent,r))
     return xx,yy,np.column_stack((xx.reshape(-1),yy.reshape(-1)))
 
-def gen_local_grid(layout,plot_points):
+def find_relative_coords(layout,plot_points):
     #find the r, theta coordinates relative to each turbine
     xt_j,yt_j = layout[:,0],layout[:,1]
     xt_k,yt_k = plot_points[:,0],plot_points[:,1]
