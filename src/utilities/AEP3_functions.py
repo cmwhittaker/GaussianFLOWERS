@@ -2,7 +2,7 @@
 
 def floris_timed_aep(U_i, P_i, theta_i, layout, turb, wake=True, timed=True):
     """ 
-    calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml" .
+    calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml". The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
 
     Args:
         U_i (bins,): Average wind speed of bin
