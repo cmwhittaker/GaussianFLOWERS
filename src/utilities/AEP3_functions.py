@@ -96,27 +96,7 @@ def num_Fs(U_i,P_i,theta_i,
 
     if np.any(np.abs(theta_i) > 10): #this is needed ... 
         raise ValueError("Did you give num_F degrees?")
-    
-    def deltaU_by_Uinf_f(r,theta,Ct,K):
-        ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct))) #initial expansion width: (eq.6 + 19 +21 in Bastankah 2014 - don't forget eq21!)
-        if u_lim != None: #override the limit with the user defined radius
-            lim = u_lim
-        else:
-            lim = (np.sqrt(Ct/8)-ep)/K #invalid region
-            lim = np.where(lim<0.01,0.01,lim) #may sure it's always atleast 0.01 (stop self-produced wake) 
         
-        theta = theta + np.pi #the wake lies opposite!
-        if ex: #use full 
-            U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
-            deltaU_by_Uinf = np.where(r>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
-        else: #otherwise use small angle approximations
-            theta = np.mod(theta-np.pi,2*np.pi)-np.pi
-            U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*1+ep)**2))))*(np.exp(-(r*theta)**2/(2*(K*r*1+ep)**2)))          
-            deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
-            return deltaU_by_Uinf      
-        
-        return deltaU_by_Uinf  
-    
     def get_sort_index(layout,rot):
         #rotate layout coordinates by rot clockwise +ve (in radians)
         #returns sort_index, which is used to index the layout by the furthest upwind turbine for rotation rot
@@ -138,8 +118,9 @@ def num_Fs(U_i,P_i,theta_i,
 
     DUff_ijk = np.zeros((len(U_i),len(X),len(Xt)))
     Uwff_ij = U_i[:,None]*np.ones(((1,X.shape[0])))
-    flag = True
+    
     #the actual calculation loop
+    from utilities.helpers import deltaU_by_Uinf_f
     for i in range(len(U_i)): #for each wind direction
         
         sort_index = get_sort_index(layout,-theta_i[i]) #find
@@ -163,16 +144,13 @@ def num_Fs(U_i,P_i,theta_i,
                 if wav_Ct == None:
                     raise ValueError("For option 3 provide wav_Ct")
                 Ct = wav_Ct
-                if flag:
-                    print(f"using wav_Ct: {wav_Ct:.2f}")
-                    flag = False
             else:
                 raise ValueError("Ct_op is not supported")
 
-            DUt_ijk[i,:,k] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K)
+            DUt_ijk[i,:,k] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K,u_lim,ex)
             Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion for each turbine (turbine U_ws)
             
-            DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K)
+            DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K,u_lim,ex)
             
             Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over superposistion for eah turbine (flow field)
     
@@ -184,7 +162,6 @@ def num_Fs(U_i,P_i,theta_i,
         Uwt_ij_cube = Uwt_ij**3 #simply cube the turbine velocities
     else: #EXcluding cross terms (soat = Sum over Axis Two (third axis!)
         Uwt_ij_cube = (U_i[:,None]**3)*(1 - 3*soat(DUt_ijk) + 3*soat(DUt_ijk**2) - cube_term*soat(DUt_ijk**3)) #optionally neglect the cubic term with the cube_term option
-        print("Uwt_ij_cube: {}".format(Uwt_ij_cube))
 
     #then there are a few ways of finding the power coefficient / calculating power
     if Cp_op == 1: # base on local wake velocity C_p(U_w)
@@ -257,24 +234,6 @@ def vect_num_F(U_i,P_i,theta_i,
         pow_j (nt,) or (n_grid_points,) : aep of induvidual turbines (or meaningless: the aep if there was turbine at every plot point )
         Uwt_j (nt,) or (n_grid_points) : wake velocity at turbine locations (if layout2 is plot_points, this will give the wake velocity at the plot points, which is useful for plotting)
     """    
-    def deltaU_by_Uinf_f(r,theta,Ct,K):
-        ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct)))
-        if u_lim != None:
-            lim = u_lim
-        else:
-            lim = (np.sqrt(Ct/8)-ep)/K
-            lim = np.where(lim<0.01,0.01,lim) #may sure it's always atleast 0.01 (stop self-produced wake) 
-        
-        theta = theta + np.pi #the wake lies opposite!
-        if ex: #use full 
-            U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
-            deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
-        else: #otherwise use small angle approximations
-            theta = np.mod(theta-np.pi,2*np.pi)-np.pi
-            U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*1+ep)**2))))*(np.exp(-(r*theta)**2/(2*(K*r*1+ep)**2)))          
-            deltaU_by_Uinf = np.where(r>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
-        
-        return deltaU_by_Uinf   
 
     #I sometimes use this function to find the wake field for plotting, so find relative posistions to plot points not the layout 
     #when layout2 = plot_points it finds wake at the turbine posistions
@@ -295,8 +254,8 @@ def vect_num_F(U_i,P_i,theta_i,
     if Cp_op != 1:
         raise ValueError("Only option 1 is supported for Cp ")
     #power coefficient based on local inflow
-    
-    Uwt_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf_f(r_ijk,theta_ijk,ct_ijk,K),axis=2)) #wake velocity at turbine locations
+    from utilities.helpers import deltaU_by_Uinf_f
+    Uwt_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf_f(r_ijk,theta_ijk,ct_ijk,K,u_lim,ex),axis=2)) #wake velocity at turbine locations
     pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(turb.Cp_f(Uwt_ij)*Uwt_ij**3),axis=0)/(1*10**6)
     return pow_j,Uwt_ij
 

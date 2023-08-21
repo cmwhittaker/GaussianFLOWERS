@@ -1,5 +1,37 @@
 #%% random helper functions
 import numpy as np
+def deltaU_by_Uinf_f(r,theta,Ct,K,u_lim,ex):
+    '''
+    wake velocity deficit based on Bastankah 2013
+    Args:
+        r (np.array): r in polar coordinates
+        theta (np.array): theta in polar coordinates
+        Ct (np.array | float): Thrust coefficient
+        K (np.array | float): Wake expansion coefficient
+        u_lim (float): user defined invalid radius limit. This sets a radius around the turbine where the deficit is zero (useful for plotting)
+        ex (bool): Choice to use exact wake deficit formula (True) or a small angle approximated (False)
+    Returns:
+        deltaU_by_Uinf (np.array): wake velocity fraction at (r,theta)
+    
+    '''
+    ep = 0.2*np.sqrt((1+np.sqrt(1-Ct))/(2*np.sqrt(1-Ct))) #initial expansion width: (eq.6 + 19 +21 in Bastankah 2014 - don't forget eq21!)
+    if u_lim != None: #override the limit with the user defined radius
+        lim = u_lim
+    else:
+        lim = (np.sqrt(Ct/8)-ep)/K #invalid region
+        lim = np.where(lim<0.01,0.01,lim) #may sure it's always atleast 0.01 (stop self-produced wake) 
+    
+    theta = theta + np.pi #the wake lies opposite!
+    if ex: #use full 
+        U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
+        deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
+    else: #otherwise use small angle approximations
+        theta = np.mod(theta-np.pi,2*np.pi)-np.pi
+        U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*1+ep)**2))))*(np.exp(-(r*theta)**2/(2*(K*r*1+ep)**2)))          
+        deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
+        return deltaU_by_Uinf      
+    
+    return deltaU_by_Uinf  
 
 def linear_layout(no_xt,s):
     #returns a linear 1 x no_xt turbine grid layout starting at  (0,0) then continuing at (s,0),(2*s,0) ... etc
