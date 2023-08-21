@@ -108,11 +108,11 @@ def num_Fs(U_i,P_i,theta_i,
         theta = theta + np.pi #the wake lies opposite!
         if ex: #use full 
             U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
-            deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
+            deltaU_by_Uinf = np.where(r>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
         else: #otherwise use small angle approximations
             theta = np.mod(theta-np.pi,2*np.pi)-np.pi
             U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*1+ep)**2))))*(np.exp(-(r*theta)**2/(2*(K*r*1+ep)**2)))          
-            deltaU_by_Uinf = np.where(r>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
+            deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
             return deltaU_by_Uinf      
         
         return deltaU_by_Uinf  
@@ -173,6 +173,7 @@ def num_Fs(U_i,P_i,theta_i,
             Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion for each turbine (turbine U_ws)
             
             DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K)
+            
             Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over superposistion for eah turbine (flow field)
     
     num_Fs.DUff_ijk = DUff_ijk #(slightly hacky) this is for the cross-term plot (i don't want to change the signature just for this one use case)
@@ -183,6 +184,7 @@ def num_Fs(U_i,P_i,theta_i,
         Uwt_ij_cube = Uwt_ij**3 #simply cube the turbine velocities
     else: #EXcluding cross terms (soat = Sum over Axis Two (third axis!)
         Uwt_ij_cube = (U_i[:,None]**3)*(1 - 3*soat(DUt_ijk) + 3*soat(DUt_ijk**2) - cube_term*soat(DUt_ijk**3)) #optionally neglect the cubic term with the cube_term option
+        print("Uwt_ij_cube: {}".format(Uwt_ij_cube))
 
     #then there are a few ways of finding the power coefficient / calculating power
     if Cp_op == 1: # base on local wake velocity C_p(U_w)

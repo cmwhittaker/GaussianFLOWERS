@@ -47,7 +47,8 @@ layout2 = np.array(((0,0),(-3,-0.2),(-3,+0.2)))
 layout2[:,0] = layout2[:,0] + 10000
 #put two farms together
 layout = np.concatenate((layout1,layout2),axis=0)
-#local power coeff (Cp_op=1),local thrust coeff (Cp_op=1), include cross terms, exact wake deficit
+
+#local thrust coeff (Ct_op=1),local power coeff (Cp_op=1), include cross terms (cross_ts=True), exact wake deficit (ex=True)
 from utilities.AEP3_functions import num_Fs
 pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
                    layout,layout,
@@ -55,8 +56,8 @@ pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
                    K,
                    Ct_op=1,
                    Cp_op=1,
-                   cross_ts=True,
-                   ex=True)
+                   cross_ts=True,ex=True)
+
 print(f"hand power check aep:   {49.25:.2f}   (this is fixed)")
 print(f"simple power check aep: {P_t:.4f}")
 print(f"num_F power check aep:  {np.sum(pow_j):.4f}")

@@ -1,38 +1,75 @@
-#%% this is a work in progress script containing a number of test cells (ipy) I'm still finalising. I'm reasonably confident that what I have is correct but I have not yet completed comphrehensive testing. 
-
-#these cells don't even work right now
-
-#%% then the next test ...
-
+#%% test3 which is the 15ms / 13ms one
 import sys
 import os
 sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
+
+if hasattr(sys, 'ps1'):
+    #if it's interactive, re-import modules every run
+    %load_ext autoreload
+    %autoreload 2
 
 import numpy as np
 from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
 K=0.03 #wake expansion rate
+alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
+
 U_i = np.array((15,13))
 P_i = np.array((0.5,0.5))
 theta_i = np.array((0,np.pi/2))
-layout = np.array(((0,0),(-0.2,-3),(+0.2,-3)))
 from utilities.helpers import get_WAV_pp
+#weight average using expected power production
 wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
 wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
+lim = (np.sqrt(wav_Ct/8)-wav_ep)/K # the x limit
+#print("limit: {}".format(lim))
+if lim < 0.01:
+    lim = 0.01 #stop self produced wake
 
-def U_delta2(x,y): #slightly modified
-      ct = wav_Ct
-      ep = wav_ep
-      U_delta = (1-np.sqrt(1-(ct/(8*(K*y+ep)**2))))*(np.exp(-x**2/(2*(K*y+ep)**2)))
-      U_delta = np.where(y>lim,U_delta,0)
+def U_delta_SA(a,o):
+      #"dumb" way to convert to polar
+      #a:adjacent to angle, o:opposite to angle
+      r = np.sqrt(a**2+o**2)
+      theta = np.arctan2(a,o)
+      #wake velocity deficit with small angle
+      #use weight-averaged globals for Ct and ep
+      U_delta = (1-np.sqrt(1-(wav_Ct/(8*(K*r*1+wav_ep)**2))))*(np.exp(-(r*theta)**2/(2*(K*r*1+wav_ep)**2)))   
+      U_delta = np.where(r>lim,U_delta,0)
       return U_delta
-def Pwr2(U_inf,delta): #power given local wake velocity
-     #now neglecting the cross terms (without cubic term)
-     U_cube = U_inf**3*(1-delta+3*delta**2)
+
+def Pwr_NC(U_inf,delta): 
+     #power neglecting the cross terms (and without cubic term)
+     #and with a global power coefficient
+     U_cube = U_inf**3*(1-3*delta+3*delta**2)
      return alpha*turb.Cp_f(U_inf)*U_cube
+
 #Northerly 15ms: 1xundisturbed, 2xsingularly waked
-P_n = Pwr2(U_i[0],0)+2*Pwr2(U_i[0],U_delta2(0.2,3))
+P_n = Pwr_NC(U_i[0],0)+2*Pwr_NC(U_i[0],U_delta_SA(0.2,3))
+#Easterly 13ms: 2xundisturbed, 1xsingularly waked
+P_e = 2*Pwr_NC(U_i[1],0)+Pwr_NC(U_i[1],U_delta_SA(0,0.4))
+#total power
+P_t = P_i[0]*P_n + P_i[1]*P_e
+
+#next check if num_F and vect_num_F are giving the same result
+layout = np.array(((0,0),(-0.2,-3),(+0.2,-3)))
+
+#cnst thrust coeff (Ct_op=3, wav_Ct=wav_Ct),global power coeff (Cp_op=2), neglect cross terms (cross_ts=False), approx. wake deficit (ex=False), neglect cube terms (cube_term=False)
+from utilities.AEP3_functions import num_Fs,vect_num_F
+pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
+                    layout,layout,
+                    turb,
+                    K,
+                    Ct_op=3,wav_Ct=wav_Ct,
+                    Cp_op=2,
+                    cross_ts=False,ex=False,cube_term=False)
+
+print(f"hand power check aep:  {22.21:.2f}   (this is fixed)")
+print(f"simple power check aep:{P_t:.4f}")
+print(f"num_F power check aep: {np.sum(pow_j):.4f}")
+#%%
+
+
 #Westerly 13ms: 2xundisturbed, 1xsingularly waked
 P_w = 2*Pwr2(U_i[1],0)+Pwr2(U_i[1],U_delta2(0,0.4))
 #total power:
