@@ -321,7 +321,7 @@ def ntag_PA(Fourier_coeffs3_PA,
 
     Returns:
         pow_j (nt,) : aep of induvidual turbines
-        alpha (nt,2) | (plot_points,2) : "energy content" (Cp*P*U**3) of the wind at turbine locations or plot_points
+        alpha (nt,2) | (plot_points,2) : "energy content" (Cp(U)*P*U**3) of the wind at turbine locations or plot_points
     """
     r_jk,theta_jk = find_relative_coords(layout1,layout2) #find relative posistions
 
