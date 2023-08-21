@@ -2,7 +2,8 @@
 
 def floris_timed_aep(U_i, P_i, theta_i, layout, turb, wake=True, timed=True):
     """ 
-    calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml". The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
+    calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml". 
+    The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
     
 
     Args:
@@ -46,7 +47,7 @@ def num_Fs(U_i,P_i,theta_i,
            cross_ts=True,ex=True,cube_term=True):
     """ 
     "general purpose" numerical equivalent of the many different options to handle the aep calcuation integration. 
-
+    (the overlap in functionality between this and ntag, vect_num_Fs and caag is useful for validation)
     Args:
         U_i (bins,): Average wind speed of bin
         P_i (bins,): Probability of bin
@@ -72,11 +73,11 @@ def num_Fs(U_i,P_i,theta_i,
                      Ct_op == 2: Global power coefficient Ct(U_\infty)
                      Ct_op == 3: Constant power coefficient
                         (this isn't really used...)
-                        The constant is passed to the function with the wav_Ct "weight-averaged" kwarg
+                        The constant is passed to the function with the wav_Cp "weight-averaged" kwarg
                      Ct_op == 4: This turns num_Fs into the numerical equivalent of the "Jensen FLOWERS" approach but with a Guassian wake model.
                      Ct_op == 5: This turns num_Fs into the numerical equivalent of the "Jensen FLOWERS v2.0" (may be inccorect) approach but with a Guassian wake model.
 
-        Options 4 and 5 are meant to mimick analytical methods, so there is some limited functionality to stop the user selecting combinations that have no analytical equivalent
+                     Options 4 and 5 are meant to mimick analytical methods, so there is some limited functionality to stop the user selecting combinations that have no analytical equivalent
 
         cross_ts (bool): True or False to include or neglect the cross terms
         ex (bool): "EXact wake model" - False to use small angle approximation
@@ -89,9 +90,11 @@ def num_Fs(U_i,P_i,theta_i,
     """
     #generally, the numpy arrays are indexed as:
     #(i,j,k)
-    #(wind bins, turbines in farm, turbines in superposistion)
+    #(wind bins, turbines in farm, turbines in superposistion) e.g.
+    #(72,5,5) for 72 binned 5 turbine farm 
+    #(it should be (72,5,5-1) but I make sure lim>0 to stop turbines producing their own wake - I found the implementation was more intuitive than removing a column/row in the matrix)
 
-    if np.any(np.abs(theta_i) > 10): #this is needed ...
+    if np.any(np.abs(theta_i) > 10): #this is needed ... 
         raise ValueError("Did you give num_F degrees?")
     
     def deltaU_by_Uinf_f(r,theta,Ct,K):
@@ -115,7 +118,8 @@ def num_Fs(U_i,P_i,theta_i,
         return deltaU_by_Uinf  
     
     def get_sort_index(layout,rot):
-        #rotate layout coordinates by rot clockwise (in radians)
+        #rotate layout coordinates by rot clockwise +ve (in radians)
+        #returns sort_index, which is used to index the layout by the furthest upwind turbine for rotation rot
         Xt,Yt = layout[:,0],layout[:,1]
         rot_Xt = Xt * np.cos(rot) + Yt * np.sin(rot)
         rot_Yt = -Xt * np.sin(rot) + Yt * np.cos(rot) 
@@ -155,12 +159,12 @@ def num_Fs(U_i,P_i,theta_i,
                 Ct = turb.Ct_f(Uwt_ij[i,k])
             elif Ct_op == 2: #base on global inflow
                 Ct = turb.Ct_f(U_i[i]) 
-            elif Ct_op == 3:
+            elif Ct_op == 3: #based on some constant
                 if wav_Ct == None:
-                    raise ValueError("For option 3 provide WAV_CT")
+                    raise ValueError("For option 3 provide wav_Ct")
                 Ct = wav_Ct
                 if flag:
-                    print(f"using WAV_CT: {wav_Ct:.2f}")
+                    print(f"using wav_Ct: {wav_Ct:.2f}")
                     flag = False
             else:
                 raise ValueError("Ct_op is not supported")
@@ -181,23 +185,23 @@ def num_Fs(U_i,P_i,theta_i,
         Uwt_ij_cube = (U_i[:,None]**3)*(1 - 3*soat(DUt_ijk) + 3*soat(DUt_ijk**2) - cube_term*soat(DUt_ijk**3)) #optionally neglect the cubic term with the cube_term option
 
     #then there are a few ways of finding the power coefficient / calculating power
-    if Cp_op == 1: #power coeff based on local wake velocity
+    if Cp_op == 1: # base on local wake velocity C_p(U_w)
         Cp_ij = turb.Cp_f(Uwt_ij)
         pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(Cp_ij*Uwt_ij_cube),axis=0)/(1*10**6)
-    elif Cp_op == 2: #power coeff based on global inflow U_infty
+    elif Cp_op == 2: #base on global inflow C_p(U_\infty) 
         Cp_ij = turb.Cp_f(U_i)[:,None]
         pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(Cp_ij*Uwt_ij_cube),axis=0)/(1*10**6)
-    elif Cp_op == 3: #use weight averaged Cp
+    elif Cp_op == 3: #based on some constant (weight-averaged)
         if wav_Cp is None:
             raise ValueError("For Cp option 3 provide wav_Cp")
         pow_j = 0.5*turb.A*RHO*wav_Cp*np.sum(P_i[:,None]*(Uwt_ij**3),axis=0)/(1*10**6)
-    elif Cp_op == 4: #the old way (found analytical version in FYP)
+    elif Cp_op == 4: #Gaussian equivlent of Jensen FLOWERS method (as found in the final year project)
         if Ct_op != 3:
             raise ValueError("This has no analyical equivalent Ct_op should probably be 3")
         alpha = np.sum(P_i[:,None]*Uwt_ij,axis=0) #the weight average velocity field
         pow_j = 0.5*turb.A*RHO*turb.Cp_f(alpha)*alpha**3/(1*10**6)
     elif Cp_op == 5: 
-        #This is Cp^1/3 method(may be incorrect)
+        #This is Cp^1/3 method (may be incorrect) from FLOWERS v2.0
         if Ct_op != 3:
             raise ValueError("Cp_op should be 3")
         alpha = np.sum((turb.Cp_f(Uwt_ij))**(1/3)*P_i[:,None]*Uwt_ij,axis=0) #the weight average velocity field
@@ -206,7 +210,7 @@ def num_Fs(U_i,P_i,theta_i,
         raise ValueError("Cp_op value is not supported")
     #(j in Uwff_j here is indexing the meshgrid)
     Uwt_j = np.sum(P_i[:,None]*Uwt_ij,axis=0)
-    Uwff_j = np.sum(P_i[:,None]*Uwff_ij,axis=0) #weighted flow field
+    Uwff_j = np.sum(P_i[:,None]*Uwff_ij,axis=0) #probability weighted flow field
     
     return pow_j,Uwt_j,Uwff_j 
 
