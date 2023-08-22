@@ -2,7 +2,7 @@
 import numpy as np
 def deltaU_by_Uinf_f(r,theta,Ct,K,u_lim,ex):
     '''
-    wake velocity deficit based on Bastankah 2013
+    wake velocity deficit based on Bastankah 2014
     Args:
         r (np.array): r in polar coordinates
         theta (np.array): theta in polar coordinates
@@ -79,8 +79,7 @@ def find_relative_coords(layout,plot_points):
     y_jk = yt_k[:, None] - yt_j[None, :]
 
     r_jk = np.sqrt(x_jk**2+y_jk**2)
-    #convert theta from clckwise -ve x axis to clckwise +ve y axis 
-    theta_jk = np.pi/2 - np.arctan2(y_jk, x_jk)
+    theta_jk = np.arctan2(x_jk,y_jk) #clockwise +ve from +ve y axis
 
     return r_jk,theta_jk  
 
@@ -101,7 +100,10 @@ def simple_Fourier_coeffs(data):
     # #convert to phase amplitude form
     A_n = np.sqrt(a_n**2+b_n**2)
     Phi_n = -np.arctan2(b_n,a_n)
-    Fourier_coeffs_PA = a_0,A_n,Phi_n
+    #add the dc term on the front with Phi_0 = 0
+    A_n = np.concatenate((np.array((a_0/2,)),A_n))
+    Phi_n = np.concatenate((np.array((0,)),Phi_n))
+    Fourier_coeffs_PA = A_n,Phi_n #pack
     
     return Fourier_coeffs,Fourier_coeffs_PA
 

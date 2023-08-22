@@ -148,18 +148,19 @@ def num_Fs(U_i,P_i,theta_i,
                 raise ValueError("Ct_op is not supported")
 
             DUt_ijk[i,:,k] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K,u_lim,ex)
-            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion for each turbine (turbine U_ws)
-            
+            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion for each turbine (turbine U_ws)            
             DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K,u_lim,ex)
             
             Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over superposistion for eah turbine (flow field)
     
+    num_Fs.DUt_ijk = DUt_ijk #debugging
     num_Fs.DUff_ijk = DUff_ijk #(slightly hacky) this is for the cross-term plot (i don't want to change the signature just for this one use case)
     
     if cross_ts: #INcluding cross terms
         if cube_term == False:
             raise ValueError("Did you mean to neglect the cross terms?")
         Uwt_ij_cube = Uwt_ij**3 #simply cube the turbine velocities
+    
     else: #EXcluding cross terms (soat = Sum over Axis Two (third axis!)
         Uwt_ij_cube = (U_i[:,None]**3)*(1 - 3*soat(DUt_ijk) + 3*soat(DUt_ijk**2) - cube_term*soat(DUt_ijk**3)) #optionally neglect the cubic term with the cube_term option
 
@@ -234,7 +235,9 @@ def vect_num_F(U_i,P_i,theta_i,
         pow_j (nt,) or (n_grid_points,) : aep of induvidual turbines (or meaningless: the aep if there was turbine at every plot point )
         Uwt_j (nt,) or (n_grid_points) : wake velocity at turbine locations (if layout2 is plot_points, this will give the wake velocity at the plot points, which is useful for plotting)
     """    
-
+    if np.any(np.abs(theta_i) > 10): #this is needed ... 
+        raise ValueError("Did you give me degrees?")
+    
     #I sometimes use this function to find the wake field for plotting, so find relative posistions to plot points not the layout 
     #when layout2 = plot_points it finds wake at the turbine posistions
     r_jk,theta_jk = find_relative_coords(layout1,layout2) #find theta relative to each turbine and each turbine in superposistion
@@ -265,7 +268,9 @@ def ntag_PA(Fourier_coeffs3_PA,
             turb,
             K,
             wav_Ct,
+            u_lim=3,
             RHO=1.225):
+    #something to do with the handling of the Fourier series is broken
     """ 
     "No cross Terms Analytical Gaussian (Phase Amplitude)" - The "Gaussian FLOWERS" method implemented 
 
@@ -284,36 +289,44 @@ def ntag_PA(Fourier_coeffs3_PA,
         pow_j (nt,) : aep of induvidual turbines
         alpha (nt,2) | (plot_points,2) : "energy content" (Cp(U)*P*U**3) of the wind at turbine locations or plot_points
     """
-    r_jk,theta_jk = find_relative_coords(layout1,layout2) #find relative posistions
+    r_jk,theta_jk = find_relative_coords(layout1,layout2)  #find relative posistions
+    theta_jk = theta_jk - np.pi #wake lies opposite
+    theta_jk = np.mod(theta_jk + np.pi, 2 * np.pi) - np.pi #fix domain
+    #is this necessary?!
 
-    a_0,A_n,Phi_n = Fourier_coeffs3_PA
+    A_n,Phi_n = Fourier_coeffs3_PA
+    a_0 = 2*A_n[0] #because A_n[0] = a_0 / 2
 
     EP = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
-    #auxilaries
-    n = np.arange(1,A_n.size+1,1)
+    #auxilaries 
+    n = np.arange(0,A_n.size,1)
     sigma = np.where(r_jk!=0,(K*r_jk+EP)/r_jk,0)
     lim = (np.sqrt(wav_Ct/8)-EP)/K
-    lim = np.where(lim<0.01,0.01,lim)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2)))))
-
+    lim = np.where(lim<u_lim,u_lim,lim) #pick greater from u_lim and lim
+    if np.any((r_jk<lim) & (r_jk != 0)):
+        raise ValueError("turbines within the invalid region, this will likely cause erroneously low AEP")
+    #if turbine 1 is posistioned adjacent to turbine 2, neither upwind or downwind (""inline with each other, perpendicular to the wind direction"")", if within the r limit, turbine 1 will be waked by turbine 2 - which is not realistic (or atleast not as described by Bastankah 2014)
+    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) #careful, even though it uses a small angle approximation, the domain is still restricted exactly
+    
     #modify some dimensions ready for broadcasting
     n_b = n[None,None,:]  
     sigma_b = sigma[:,:,None]
     A_n = A_n[None,None,:]
     Phi_n = Phi_n[None,None,:]
-    theta_b = theta_jk[:,:,None] + np.pi #wake is downstream
+    theta_b = theta_jk[:,:,None]
     #more auxilaries
-    fs = A_n*np.cos(n_b*theta_b+Phi_n)
+    fs = A_n*np.cos(n_b*theta_b+Phi_n) #fourier series (including DC!)
     nsigma = sigma_b*n_b
 
     def term(a):
         cnst_term = ((np.sqrt(2*np.pi*a)*sigma)/(a))*(sqrt_term**a)
-        mfs = (a_0/2 + np.sum(np.exp(-((nsigma)**2)/(2*a))*(fs),axis=-1)) #modified Fourier series
+        mfs = (np.sum(np.exp(-((nsigma)**2)/(2*a))*(fs),axis=-1)) #modified Fourier series
         return np.sum(cnst_term*mfs,axis=-1)
-
+    #this could be more efficient!
     #alpha is the 'energy' content of the wind
     alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) #- term(3)
+    #print("alpha: {}".format(alpha))
     #(I fully vectorised this and it ran slower ... so I'm sticking with this)
     #If it were vectorised using dimensions sparingly (e.g. don't broadcast everything to 4D (alpha,J,K,N) ) immediately) it might be faster
     if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation

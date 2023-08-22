@@ -1,4 +1,10 @@
-#%%
+#%% 
+# 7 shaped layout with num_F
+# subject to
+# U_i = [15,13]
+# P_i = [0.7,0.3]
+# theta_i = [0,np.pi/2]
+
 import sys
 import os
 sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
@@ -13,41 +19,46 @@ from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
 K=0.03 #wake expansion rate
-U_inf = 13 #can adjust, be careful of lim being <0.4
-ct = turb.Ct_f(U_inf) #Ct
-ep = 0.2*np.sqrt((1+np.sqrt(1-ct))/(2*np.sqrt(1-ct)))
-lim = (np.sqrt(ct/8)-ep)/K # the x limit
-if lim < 0.01:
-    lim = 0.01 #stop self produced wake
 alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
+U_i = np.array((15,13,))
+P_i = np.array((0.7,0.3))
+theta_i = np.array((0,np.pi/2))
+layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 
 #simple implementation of the Gaussian wake model
-def U_delta(x,y):
-      U_delta = (1-np.sqrt(1-(ct/(8*(K*y+ep)**2))))*(np.exp(-x**2/(2*(K*y+ep)**2)))
-      U_delta = np.where(y>lim,U_delta,0)
-      return U_delta
+def U_delta(x,y,U_inf):
+    #local wake coefficient!
+    ct = turb.Ct_f(U_inf)
+    ep = 0.2*np.sqrt((1+np.sqrt(1-ct))/(2*np.sqrt(1-ct)))
+    lim = (np.sqrt(ct/8)-ep)/K # the x limit
+    if lim < 0.01:
+        lim = 0.01 #stop self produced wake
+    U_delta = (1-np.sqrt(1-(ct/(8*(K*y+ep)**2))))*(np.exp(-x**2/(2*(K*y+ep)**2)))
+    U_delta = np.where(y>lim,U_delta,0)
+    return U_delta
+
 def Pwr(U): #power given local wake velocity
-     return alpha*turb.Cp_f(U)*U**3
-#1xundisturbed, 2xsingularly waked
-P_a = Pwr(U_inf)+2*Pwr(U_inf*(1-U_delta(0.2,3)))
-#2xundisturbed, 1xsingularly waked
-P_b = 2*Pwr(U_inf) +Pwr(U_inf*(1-U_delta(0,0.4)))
-#2xundisturbed, 1xdoubly waked
-P_c = 2*Pwr(U_inf) +Pwr(U_inf*(1-2*U_delta(0.2,3)))
-#total power if there are no rotation mistakes
-P_t = P_a + P_b
+    return alpha*turb.Cp_f(U)*U**3
+
+# === North @ U_inf1 ===
+#T0, T1 are unwaked
+Uw_nT0T1 = U_i[0]
+#T2 is waked by T1
+Uw_nT2 = U_i[0]*(1-U_delta(0.2,3,Uw_nT0T1))
+#T3 is waked by T1 and T2
+Uw_nT3 = U_i[0]*(1-(U_delta(0.4,6,Uw_nT0T1)+U_delta(0.2,3,Uw_nT2)))
+#Total power is found from the wake velocities
+P_n =  2*Pwr(Uw_nT0T1)+Pwr(Uw_nT2)+Pwr(Uw_nT3)
+
+# === East @ U_inf2 ===
+#T1,T2,T3 are unwaked
+Uw_eT0T12 = U_i[1]
+#T0 is waked by T1
+Uw_eT2 = U_i[1]*(1-U_delta(0,3,Uw_eT0T12))
+#Total power is found from the wake velocities
+P_e =  3*Pwr(Uw_eT0T12)+Pwr(Uw_eT2)
 
 #Next check num_Fs is giving the same result
-U_i = np.array((U_inf,U_inf))
-P_i = np.array((0.5,0.5))
-theta_i = np.array((0,np.pi/2))
-layout1 = np.array(((0,0),(-0.2,-3),(+0.2,-3)))
-layout2 = np.array(((0,0),(-3,-0.2),(-3,+0.2)))
-#space two farms by 10000 diameters (so they don't intefere)
-layout2[:,0] = layout2[:,0] + 10000
-#put two farms together
-layout = np.concatenate((layout1,layout2),axis=0)
-
 #local thrust coeff (Ct_op=1),local power coeff (Cp_op=1), include cross terms (cross_ts=True), exact wake deficit (ex=True)
 from utilities.AEP3_functions import num_Fs
 pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
@@ -57,22 +68,6 @@ pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
                    Ct_op=1,
                    Cp_op=1,
                    cross_ts=True,ex=True)
-
-print(f"hand power check aep:   {49.25:.2f}   (this is fixed)")
-print(f"simple power check aep: {P_t:.4f}")
-print(f"num_F power check aep:  {np.sum(pow_j):.4f}")
-
-#%%
-from utilities.helpers import find_relative_coords
-Xt,Yt = np.array((0,0))
-a1 = np.column_stack((Xt,Yt))
-xt,yt = np.array((1,1))
-b1 = np.column_stack((xt,yt))
-theta_i = 0.2
-
-Rt = np.sqrt((Xt-xt)**2+(Yt-yt)**2)
-THETAt = np.pi/2 - np.arctan2(Yt-yt,Xt-xt) - theta_i
-print(Rt,THETAt)
-a,b = find_relative_coords(b1,a1) 
-b = b - theta_i
-print(a,b)
+print("=== Test 1 ===")
+print(f"simple power check aep: {P_i[0]*P_n+P_i[1]*P_e:.6f}")
+print(f"num_F power check aep:  {np.sum(pow_j):.6f}")

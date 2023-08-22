@@ -53,6 +53,15 @@ pow_j2,_,_ = num_Fs(U_i,P_i,theta_i,
 print(f"num_F power check aep: {np.sum(pow_j2):.4f}")
 
 #%% now check ntag using num_Fs
+
+import sys
+import os
+sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
+from utilities.turbines import iea_10MW
+turb = iea_10MW()
+layout = np.array(((0,0),(-0.2,-3),(+0.2,-3)))
+K=0.03
+
 import numpy as np
 U_inf = 13
 def new_wr1(NO_BINS):
@@ -93,6 +102,7 @@ for m in multipliers:
       print(f'with {str(m*36)} bins:')
       print("num_f aep4: {}".format(np.sum(aep4)))
       print("ntag  aep5: {}".format(np.sum(aep5)))
+
 print("the two *should* converge ")
 #%%and for a reasonably fine, realistc, wind rose (72 bins), the results should be close
 from utilities.helpers import get_floris_wind_rose
@@ -209,3 +219,198 @@ print("hand result: 0.219736")
 # Since in both cases the power generation is the same (note that 2. would be 0.5*P_a + 0.5*P_c if the first coordinate system was wrong), the coordinate system must be correct
 # 
 # The power calculations were performed 1) by hand 2) using simplified functions 3) using the actual functions. They all agree
+
+
+#%%
+import sys
+import os
+sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
+if hasattr(sys, 'ps1'):
+    #if it's interactive, re-import modules every run
+    %load_ext autoreload
+    %autoreload 2
+
+
+import numpy as np
+from utilities.turbines import iea_10MW
+turb = iea_10MW()
+
+U_inf = 15
+K = 0.03
+
+def new_wr1(no_bins):
+    if not no_bins%4 == 0:
+        raise ValueError("no_bins must be a multiple of 4") 
+    theta_i = np.linspace(0,2*np.pi,no_bins,endpoint=False)
+    case = 3
+    if case == 1: 
+        print("impulse wr")
+        U_i = np.zeros(no_bins)
+        U_i[0] = U_inf
+        P_i = np.zeros(no_bins)
+        P_i[0] = 1.0        
+    elif case == 2: 
+        print("uniform wr")
+        U_i = np.full(no_bins,U_inf)  
+        P_i = np.full(no_bins,1/(no_bins)) 
+    elif case == 3: 
+        print("two directions wr")
+        U_i = np.zeros(no_bins)
+        U_i[0],U_i[no_bins//4] = U_inf,13
+        P_i = np.zeros(no_bins)
+        P_i[0],P_i[no_bins//4] = 0.5,0.5
+    elif case == 4: 
+        print("east impulse")
+        U_i = np.zeros(no_bins)
+        U_i[no_bins//4] = U_inf
+        P_i = np.zeros(no_bins)
+        P_i[no_bins//4] = 1.0
+    return U_i, P_i, theta_i
+
+no_bins = 640
+U_i,P_i,theta_i = new_wr1(no_bins)
+
+def rotate_coordinates(coords, angle):
+    # Convert angle to radians
+    theta = np.deg2rad(-angle)
+    # Rotation matrix for clockwise rotation
+    R = np.array([[np.cos(theta), np.sin(theta)],
+                  [-np.sin(theta), np.cos(theta)]])
+    
+    # Rotate coordinates
+    rotated_coords = np.dot(coords, R.T) 
+    return rotated_coords
+
+layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+#layout = np.array(((0,0),(0,-3),(0.4,-3)))
+layout = rotate_coordinates(layout,0)
+
+from utilities.helpers import simple_Fourier_coeffs,get_WAV_pp
+wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
+wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
+lim = (np.sqrt(wav_Ct/8)-wav_ep)/K # the x limit
+print("lim: {}".format(lim))
+from utilities.AEP3_functions import num_Fs,ntag_PA
+#this should agree with num_F
+pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
+                    layout,layout,
+                    turb,
+                    K,
+                    Ct_op=3,wav_Ct = wav_Ct, #cnst Ct
+                    Cp_op=2, #global Cp
+                    cross_ts=False,cube_term=False,ex=False)
+
+c,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi)))
+A_n, Phi_A  = cjd3_PA_terms
+
+pow_j2,_ = ntag_PA(cjd3_PA_terms,
+            layout,layout,
+            turb,
+            K,
+            wav_Ct,
+            u_lim=1.9)
+
+print("pow_j1: {}".format(pow_j1))
+print("pow_j2: {}".format(pow_j2))
+print("=== sums ===")
+print("sum1: {}".format(np.sum(pow_j1)))
+print("sum2: {}".format(np.sum(pow_j2)))
+
+#%% construct the Fourier?
+def f(cjd3_PA_terms,x):
+    A_n, Phi_A = cjd3_PA_terms
+    n = np.arange(0,len(A_n),1)
+    return np.sum(A_n[None,:]*np.cos(n[None,:]*x[:,None]+Phi_A[None,:]),axis=-1)
+
+xs = np.linspace(0,2*np.pi,10000)
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.plot(xs,f(cjd3_PA_terms,xs))
+ax.set(xlim=(-0.1,2*np.pi+0.1))
+#%%
+a_0,a_n,b_n = c
+A_n = np.sqrt(a_n**2+b_n**2)
+Phi_n = -np.arctan2(b_n,a_n)
+n = np.arange(1,len(A_n)+1,1)
+xs = np.linspace(-0.1,2*np.pi+0.1,10000,endpoint=False)
+yr = a_0/2 + np.sum(A_n[None,:]*np.cos(n[None,:]*xs[:,None]+Phi_n[None,:]),axis=-1)
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.plot(xs,yr)
+ax.vlines(theta_i[0],0,np.max(yr))
+ax.vlines(theta_i[no_bins//4],0,np.max(yr),color='orange')
+
+#%%
+import numpy as np
+from scipy.fft import fft
+
+# Discretize the function
+N = no_bins  # Number of samples
+x = np.linspace(0, 2*np.pi, N, endpoint=False)
+y = turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi))
+
+# Compute the Fourier coefficients
+coeffs = fft(y) / N
+
+# Extract a_n and b_n for n=0 to N/2
+a = 2 * coeffs.real
+b = -2 * coeffs.imag
+
+# Compute A_n and Phi_n
+A_n = np.sqrt(a**2 + b**2)
+Phi_n = np.arctan2(-b, a)
+
+# Now, you can use A_n and Phi_n to reconstruct the function
+g = np.zeros_like(x)
+for n in range(N//2):  # Only consider up to N/2 due to Nyquist theorem
+    g += A_n[n] * np.cos(n * x + Phi_n[n])
+
+# Plot the original and reconstructed functions
+import matplotlib.pyplot as plt
+plt.plot(x, y, label='Original f(x)')
+plt.plot(x, g, '--', label='Reconstructed g(x)')
+plt.legend()
+plt.show()
+
+
+#%%
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.scatter(layout[:,0],layout[:,1])
+#ax.set(aspect='equal')
+for i in range(len(layout[:,0])):
+       ax.annotate(str(i),(layout[i,0],layout[i,1]))
+
+#%% 
+from utilities.helpers import fixed_rectangular_domain, deltaU_by_Uinf_f, find_relative_coords
+layout3 = np.array(((0,0,)))
+X,Y,plot_points = fixed_rectangular_domain(10,200)
+import matplotlib.pyplot as plt
+from matplotlib import cm
+R,THETA = find_relative_coords(layout,plot_points)
+THETA = THETA + np.pi
+THETA = np.mod(THETA + np.pi, 2 * np.pi) - np.pi
+fig,ax = plt.subplots(figsize=(3,3),dpi=200)
+cf = ax.contourf(X,Y,THETA[:,2].reshape(X.shape),50,cmap=cm.coolwarm)
+fig.colorbar(cf)
+
+#%%
+from ipywidgets import *
+
+def update(theta_i=0):
+      THETA1 = np.arctan2(X,Y) - theta_i
+      Z = deltaU_by_Uinf_f(R.reshape(-1),THETA1.reshape(-1),wav_Ct,0.03,None,True)
+      fig,ax = plt.subplots(figsize=(3,3),dpi=200)
+      cf = ax.contourf(X,Y,Z.reshape(X.shape),50,cmap=cm.coolwarm)
+      fig.colorbar(cf)
+
+interact(update, theta_i= widgets.FloatSlider(value=0, min=-4*np.pi, max=4*np.pi, step=np.pi/4) )
+
+#%%
+import matplotlib.pyplot as plt
+from matplotlib import cm
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+cf = ax.contourf(X,Y,THETA2,50,cmap=cm.coolwarm)
+fig.colorbar(cf)
+
+#%%
