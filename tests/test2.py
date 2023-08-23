@@ -109,28 +109,31 @@ print(f"ntag   aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")
 
 #%% the two functions should also agree for a more complex wind rose (layout is unchanged)
 from utilities.helpers import get_floris_wind_rose,pce
-site_no = 12 #vary between 1-12 (inclusive)
-U_i,P_i = get_floris_wind_rose(site_no,wd=np.arange(0, 360, 1))
-theta_i = np.linspace(0,2*np.pi,len(U_i))
-_,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi)))
-wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
+import warnings
+result = []
+for i in range(12):
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=RuntimeWarning)
+        U_i,P_i = get_floris_wind_rose(i+1,wd=np.arange(0, 360, 1))
+        theta_i = np.linspace(0,2*np.pi,len(U_i))
+        _,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi)))
+        wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
 
-pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
-                   layout,layout,
-                   turb,
-                   K,
-                   Ct_op=3,wav_Ct=wav_Ct,
-                   Cp_op=2,
-                   cross_ts=False,cube_term=False,ex=False)
+        pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
+                        layout,layout,
+                        turb,
+                        K,
+                        Ct_op=3,wav_Ct=wav_Ct,
+                        Cp_op=2,
+                        cross_ts=False,cube_term=False,ex=False)
 
-pow_j2,_ = ntag_PA(cjd3_PA_terms,
-            layout,layout,
-            turb,
-            K,
-            wav_Ct,
-            u_lim=1.9)
+        pow_j2,_ = ntag_PA(cjd3_PA_terms,
+                    layout,layout,
+                    turb,
+                    K,
+                    wav_Ct,
+                    u_lim=1.9)
+        result.append(pce(np.sum(pow_j1),np.sum(pow_j2)))
 
 print("=== Test 2B ===")
-print("These should agree approximately")
-print(f"num_F  aep: {np.sum(pow_j1):.6f}")
-print(f"ntag   aep: {np.sum(pow_j2):.6f} (with {len(U_i)} bins) ({pce(np.sum(pow_j1),np.sum(pow_j2)):+.3f})%")
+print(f"{np.mean(result):+.3f}% mean pce error across 12 sites (with {len(U_i)} bins) ")
