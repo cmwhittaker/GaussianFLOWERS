@@ -69,5 +69,7 @@ pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
                    Cp_op=1,
                    cross_ts=True,ex=True)
 print("=== Test 1 ===")
-print(f"simple power check aep: {P_i[0]*P_n+P_i[1]*P_e:.6f}")
-print(f"num_F power check aep:  {np.sum(pow_j):.6f}")
+print(f"simple aep: {P_i[0]*P_n+P_i[1]*P_e:.6f}")
+print(f"num_F  aep: {np.sum(pow_j):.6f}")
+
+

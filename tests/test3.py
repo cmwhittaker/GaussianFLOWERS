@@ -14,7 +14,7 @@ turb = iea_10MW()
 
 K=0.03 #wake expansion rate
 alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
-no_bins = 360
+no_bins = 4*72
 U_inf1 = 15
 P_1 = 1/(no_bins)
 U_i = np.full(no_bins,U_inf1)  #each with same strength
@@ -57,6 +57,6 @@ pow_j2,_ = ntag_PA(cjd3_PA_terms,
             wav_Ct,
             u_lim=1.9)
 
-print("=== Test 3 ===")
-print(f"num_F  power check aep: {np.sum(pow_j1):.6f}")
-print(f"ntag   power check aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")
+print("=== Test 3A ===")
+print(f"num_F aep: {np.sum(pow_j1):.6f}")
+print(f"ntag  aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")

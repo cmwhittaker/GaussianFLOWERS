@@ -120,7 +120,7 @@ def get_WAV_pr(U_i,P_i,f):
     return WAV
 
 from floris.tools import WindRose
-def get_floris_wind_rose(site_n):
+def get_floris_wind_rose(site_n,**kwargs):
     #use floris to parse wind rose toolkit site data
     #(each site has its own folder)
     from pathlib import Path
@@ -128,7 +128,7 @@ def get_floris_wind_rose(site_n):
     folder_name = current_file_path.parent.parent.parent/ "data" / "WindRoseData_D" / ("site"+str(site_n))
 
     fl_wr = WindRose()
-    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None)
+    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
     wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
     U_i = wr.ws
