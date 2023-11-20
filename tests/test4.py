@@ -82,3 +82,4 @@ print("=== Test 4B ===")
 print("These should agree exactly")
 print(f"num_F aep: {np.sum(pow_j1):.6f}")
 print(f"ntag  aep: {np.sum(pow_j2):.6f} (with {len(U_i)} bins) ({pce(np.sum(pow_j1),np.sum(pow_j2)):+.3f})%")
+

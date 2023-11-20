@@ -1,10 +1,58 @@
 #%% These are all the wake calculating functions
+import numpy as np
+from pathlib import Path
+from floris.tools import FlorisInterface
+from .helpers import adaptive_timeit,deltaU_by_Uinf_f,find_relative_coords
+from scipy.interpolate import NearestNDInterpolator
+from .flowers_interface import FlowersInterface
 
-def floris_timed_aep(U_i, P_i, theta_i, layout, turb, wake=True, timed=True):
+def floris_FULL_timed_aep(fl_wr, thetaD_i, layout, turb, wake=True, timed=True):
+    """ 
+    calculates the aep of a wind farm subject to directions theta_i Settings are taken from the "floris_settings.yaml". 
+    The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
+
+    Args:
+        fl_wr: floris wind rose object
+        theta_i (bins,): In radians! Angle of bin (North is 0, clockwise +ve -to match compass bearings)
+        layout (nt,2): coordinates ((x1,y1),(x2,y2) ... (xt_nt,yt_nt)) etc. of turbines. Normalised by rotor diameter!
+        turb (turbine obj) : turbine object, must have turb.D attribute to unnormalise layout
+        wake (boolean): set False to run fi.calculate_no_wake()
+        timed (boolean) : set False to run without timings (timing takes 4-8sec)
+
+    Returns:
+        pow_j (nt,) : aep of induvidual turbines
+        time : lowest execution time measured by adaptive timeit 
+    """    
+    settings_path = Path("utilities") / "floris_settings.yaml"
+    fi = FlorisInterface(settings_path)
+
+    wd_array = np.array(fl_wr.df["wd"].unique(), dtype=float)
+    if len(thetaD_i) != len(wd_array):
+        raise ValueError("Floris is using a different amount of bins to FLOWERS (?!): len(thetaD_i) != len(wd_array)")
+    ws_array = np.array(fl_wr.df["ws"].unique(), dtype=float)
+    wd_grid, ws_grid = np.meshgrid(wd_array, ws_array, indexing="ij")
+    
+    freq_interp = NearestNDInterpolator(fl_wr.df[["wd", "ws"]],fl_wr.df["freq_val"])
+    freq = freq_interp(wd_grid, ws_grid)
+    freq_2D = freq / np.sum(freq)
+    
+    turb_type = [turb.name,]
+    fi.reinitialize(layout_x=turb.D*layout[:,0], layout_y=turb.D*layout[:,1],wind_directions=wd_array,wind_speeds=ws_array,time_series=False,turbine_type=turb_type)
+
+    if wake:
+        _,time = adaptive_timeit(fi.calculate_wake,timed=timed)
+    else:
+        _,time = adaptive_timeit(fi.calculate_no_wake,timed=timed)
+
+    pow_j = np.nansum(fi.get_turbine_powers()*freq_2D[...,None],axis=(0,1)) 
+
+    return pow_j/(1*10**6), time
+
+
+def floris_AV_timed_aep(U_i, P_i, thetaD_i, layout, turb, wake=True, timed=True):
     """ 
     calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml". 
     The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
-    
 
     Args:
         U_i (bins,): Average wind speed of bin
@@ -19,12 +67,10 @@ def floris_timed_aep(U_i, P_i, theta_i, layout, turb, wake=True, timed=True):
         pow_j (nt,) : aep of induvidual turbines
         time : lowest execution time measured by adaptive timeit 
     """
-    from pathlib import Path
-    from floris.tools import FlorisInterface
-    from utilities.helpers import adaptive_timeit
+
     settings_path = Path("utilities") / "floris_settings.yaml"
     fi = FlorisInterface(settings_path)
-    fi.reinitialize(wind_directions=theta_i, wind_speeds=U_i, time_series=True, layout_x=turb.D*layout[:,0], layout_y=turb.D*layout[:,1])
+    fi.reinitialize(wind_directions=thetaD_i, wind_speeds=U_i, time_series=True, layout_x=turb.D*layout[:,0], layout_y=turb.D*layout[:,1])
 
     if wake:
         _,time = adaptive_timeit(fi.calculate_wake,timed=timed)
@@ -33,6 +79,14 @@ def floris_timed_aep(U_i, P_i, theta_i, layout, turb, wake=True, timed=True):
 
     aep_array = fi.get_turbine_powers()
     pow_j = np.sum(P_i[:, None, None]*aep_array, axis=0)  # weight average using probability
+    return pow_j/(1*10**6), time
+
+def flowers_timed_aep(U_i,P_i,thetaD_i,layout, turb, K=0.05,Nterms =36,timed=True):
+    #theta_i in DEGREES!     
+    flower_int = FlowersInterface(U_i,P_i,thetaD_i, layout, turb,num_terms=Nterms+1, k=K) 
+    aep_func = lambda: flower_int.calculate_aep()
+    #time execution
+    pow_j,time = adaptive_timeit(aep_func,timed=timed)
     return pow_j/(1*10**6), time
 
 import numpy as np
@@ -120,7 +174,6 @@ def num_Fs(U_i,P_i,theta_i,
     Uwff_ij = U_i[:,None]*np.ones(((1,X.shape[0])))
     
     #the actual calculation loop
-    from utilities.helpers import deltaU_by_Uinf_f
     for i in range(len(U_i)): #for each wind direction
         
         sort_index = get_sort_index(layout,-theta_i[i]) #find
@@ -257,12 +310,10 @@ def vect_num_F(U_i,P_i,theta_i,
     if Cp_op != 1:
         raise ValueError("Only option 1 is supported for Cp ")
     #power coefficient based on local inflow
-    from utilities.helpers import deltaU_by_Uinf_f
     Uwt_ij = U_i[:,None]*(1-np.sum(deltaU_by_Uinf_f(r_ijk,theta_ijk,ct_ijk,K,u_lim,ex),axis=2)) #wake velocity at turbine locations
     pow_j = 0.5*turb.A*RHO*np.sum(P_i[:,None]*(turb.Cp_f(Uwt_ij)*Uwt_ij**3),axis=0)/(1*10**6)
     return pow_j,Uwt_ij
 
-from utilities.helpers import find_relative_coords
 def ntag_PA(Fourier_coeffs3_PA,
             layout1,layout2,
             turb,
@@ -270,7 +321,7 @@ def ntag_PA(Fourier_coeffs3_PA,
             wav_Ct,
             u_lim=3,
             RHO=1.225):
-    #something to do with the handling of the Fourier series is broken
+    
     """ 
     "No cross Terms Analytical Gaussian (Phase Amplitude)" - The "Gaussian FLOWERS" method implemented 
 
@@ -307,7 +358,7 @@ def ntag_PA(Fourier_coeffs3_PA,
     if np.any((r_jk<lim) & (r_jk != 0)):
         raise ValueError("turbines within the invalid region, this will likely cause erroneously low AEP")
     #if turbine 1 is posistioned adjacent to turbine 2, neither upwind or downwind (""inline with each other, perpendicular to the wind direction"")", if within the r limit, turbine 1 will be waked by turbine 2 - which is not realistic (or atleast not as described by Bastankah 2014)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) #careful, even though it uses a small angle approximation, the domain is still restricted exactly
+    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) #careful, even though it uses a small angle approximation, the domain is still restricted exactly (?)
     
     #modify some dimensions ready for broadcasting
     n_b = n[None,None,:]  
@@ -323,7 +374,7 @@ def ntag_PA(Fourier_coeffs3_PA,
         cnst_term = ((np.sqrt(2*np.pi*a)*sigma)/(a))*(sqrt_term**a)
         mfs = (np.sum(np.exp(-((nsigma)**2)/(2*a))*(fs),axis=-1)) #modified Fourier series
         return np.sum(cnst_term*mfs,axis=-1)
-    #this could be more efficient!
+
     #alpha is the 'energy' content of the wind
     alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) #- term(3)
     #print("alpha: {}".format(alpha))
@@ -362,7 +413,8 @@ def caag_PA(Fourier_coeffs_noCp_PA,
 
     r_jk,theta_jk = find_relative_coords(layout1,layout2)
 
-    a_0,A_n,Phi_n = Fourier_coeffs_noCp_PA
+    A_n,Phi_n = Fourier_coeffs_noCp_PA
+    a_0 = 2*A_n[0] #because A_n[0] = a_0 / 2
 
     EP = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 

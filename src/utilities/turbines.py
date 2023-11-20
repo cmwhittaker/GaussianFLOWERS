@@ -35,6 +35,8 @@ class iea_10MW():
         self.Z_h = 119.0 #height
         self.D = 198.0 #diameter
         self.A = np.pi*(self.D/2)**2 #area
+        self.U = 25. #cut out speed
+        self.name = 'iea_10mw'
 
     def Cp_f(self,u):
         return np.interp(u,self.wind_speed,self.Cp)

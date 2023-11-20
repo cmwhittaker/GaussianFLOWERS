@@ -92,10 +92,9 @@ def simple_Fourier_coeffs(data):
     # a_0/2 + (A_n*np.cos(n_b*theta_b+Phi_n)
     import scipy.fft
     c = scipy.fft.rfft(data)/np.size(data)
-    length = np.size(c)-1 #because the a_0 term is included in c # !! 
-    a_0 = 2*np.real(c[0])
-    a_n = 2*np.real(c[-length:])
-    b_n =-2*np.imag(c[-length:])
+    a_0 = 2*np.real(c[0]) 
+    a_n = 2*np.real(c[1:])
+    b_n =-2*np.imag(c[1:])
     Fourier_coeffs = a_0,a_n,b_n
     # #convert to phase amplitude form
     A_n = np.sqrt(a_n**2+b_n**2)
@@ -133,7 +132,7 @@ def get_floris_wind_rose(site_n,**kwargs):
     wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
     U_i = wr.ws
     P_i = wr.freq_val
-    return np.array(U_i),np.array(P_i)
+    return np.array(U_i),np.array(P_i),fl_wr
 
 #signed percentage error
 def pce(exact,approx):
@@ -149,7 +148,7 @@ import numpy as np
 import timeit
 def adaptive_timeit(func,timed=True):
     # this times func() (can't have any arguments) over ~ 4-8 secs and returns a single-execution run time in seconds
-
+    # (define func using a lambda function with no arguments before hand ... )
     result = func() #get the actual result of the function
     if timed is not True: #don't bother timing
         return result,np.NaN

@@ -1,8 +1,4 @@
-#%% Produce the 3x3 wind roses(sites)xlayouts figure that compares the accuracy of Gaussian FLOWERS to a floris reference
-#there are 6 methods being evaluated at once (most will be removed before publishing)
-
-#(rows: effect of changes to the wind rose
-#colums: effect of increasing the size of the farm)
+#%% this is the 3x3 figure comparing the ntag to the floris implemented method
 
 #%% get data to plot
 import sys
@@ -12,7 +8,8 @@ if hasattr(sys, 'ps1'):
     %autoreload 2
 
 import numpy as np
-SAVE_FIG = True
+SAVE_FIG = False
+EXTRA_INFO = False
 SPACING = 7 #turbine spacing normalised by rotor DIAMETER
 U_LIM = 3 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
 RESOLUTION = 100 #number of x/y points in contourf meshgrid
@@ -24,6 +21,36 @@ COLS = 3 #number of layout variations
 
 def empty2dPyarray(rows,cols): #create empty 2d python array
     return [[0 for j in range(cols)] for i in range(rows)]
+
+def find_errors(U_i,P_i,theta_i,layout,plot_points,turb,K):
+    # this finds the errors resulting from each of the assumptions, they are:
+    # 1. Ct_error: Approximating Ct(U_w) (local) with a constant \overline{C_t}
+    # 2. Cp_error1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
+    # 3. Cx1_error: Cros terms approximation Approximating ( \sum x )^n with ( \sum x^n )
+    # 4. SA_error: small angle approximation of the Gaussian wake model (sin(\theta) \approx \theta etc...)    
+
+    #WAV_Ct shouldn't really be global
+    from utilities.AEP3_functions import num_Fs
+    from utilities.helpers import pce
+    
+    def simple_aep(Ct_op=1,Cp_op=1,cross_ts=True,ex=True,cube_term=True):
+        pow_j,_,_= num_Fs(U_i,P_i,theta_i,
+                     layout,
+                     plot_points,
+                     turb,
+                     K=K,
+                     u_lim=None,
+                     Ct_op=Ct_op,wav_Ct=wav_Ct,
+                     Cp_op=Cp_op,wav_Cp=None,
+                     cross_ts=cross_ts,ex=ex,cube_term=cube_term)
+        return np.sum(pow_j)
+    exact = simple_aep() #the default options represent no assumptions takene
+    Ct_error = pce(exact,simple_aep(Ct_op=3)) #Ct_op 3 is a constant Ct
+    Cp_error1 = pce(exact,simple_aep(Cp_op=2)) #Cp_op 2 is a global Cp
+    Cx1_error = pce(exact,simple_aep(cross_ts=False)) #neglect cross terms
+    SA_error = pce(exact,simple_aep(ex=False)) #ex:"exact" =False so use small angle approximation
+    
+    return (Ct_error,Cp_error1,Cx1_error,SA_error)
 
 theta_i = np.linspace(0,360,NO_BINS,endpoint=False) 
 
@@ -45,6 +72,8 @@ Uwff_b = np.zeros((ROWS,COLS,plot_points.shape[0]))
 
 U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
+errors = np.zeros((ROWS,COLS,4))
+
 from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA
 
 for i in range(ROWS): #for each wind rose (site)
@@ -60,6 +89,9 @@ for i in range(ROWS): #for each wind rose (site)
         timed = True #timing toggle
         layout[i][j] = rectangular_layout(layout_n[j],SPACING,rot[j])
         
+        #find the errors due to each assumption (numerically)
+        errors[i,j,:] = find_errors(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],plot_points,turb,K)
+
         #floris aep (the reference)
         powj_a[i][j],time_a[i][j] = floris_AV_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,timed=timed)
 
@@ -103,27 +135,18 @@ for i in range(ROWS): #for each wind rose (site)
                                          K,
                                          #(Ct_op = 3 cnst) 
                                          #(Cp_op = 2 *local-ish)
-                                         wav_Ct,
-                                         Cp_op=1,wav_Cp=None)
+                                         wav_Ct)
         # *local based on the weight averaged wake velocity 
         (powj_e[i][j],_),time_e[i][j] = adaptive_timeit(aep_func_e,timed=timed)
     
-        # #floris NO WAKE aep (sanity check)
+        # #floris NO WAKE aep
         powj_f[i][j],_ = floris_AV_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False,timed=False)   
         
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
 
-#%% simple no wake sanity check
-n,m = 2,2
-Nt =  layout[n][m].shape[0]
-alpha = ((0.5*1.225*turb.A)/(1*10**6))
-no_wake_p = Nt*alpha*np.sum(P_i[:,n]*turb.Cp_f(U_i[:,n])*U_i[:,n]**3)
-print("no_wake_p: {}".format(no_wake_p))
-#this is approximately correct ...
 #%%plot the data ...
-from matplotlib import rc
-rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
-rc('text', usetex=True)
+from utilities.plotting_funcs import set_latex_font
+set_latex_font() #set latex font 
 
 def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
     ax = fig.add_subplot(gs,projection='polar')
@@ -144,7 +167,7 @@ def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
 from utilities.plotting_funcs import si_fm
 from utilities.helpers import pce
 
-def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,cont_lim=(None,None)):
+def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None)):
     ax = fig.add_subplot(gs[2*i,j+1])
 
     xticks = ax.xaxis.get_major_ticks()
@@ -172,21 +195,21 @@ def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,cont_lim=(None,None)):
     #Then the farm total values:
     props = dict(boxstyle='round', facecolor='white', alpha=0.8,pad=0.1)
 
-    aep_a = np.sum(powj_a[i][j]) #floris reference
-    aep_b = np.sum(powj_b[i][j]) #analytical AEP directly
-    aep_c = np.sum(powj_c[i][j]) #AEP from cubed weight average velocity
-    aep_d = np.sum(powj_d[i][j]) #no wake reference
-    aep_e = np.sum(powj_e[i][j]) #no wake reference
-    aep_f = np.sum(powj_f[i][j]) #no wake reference
+    aep_a = np.sum(powj_a[i][j]) #SOA reference
+    aep_d = np.sum(powj_d[i][j]) #proposed model
 
     top_left_text = f'''{aep_a:.2f}MW(ref) in {si_fm(time_a[i][j])}s
-    {aep_b:.2f}MW({pce(aep_a,aep_b):+.1f}\%) 
-    {aep_c:.2f}MW({pce(aep_a,aep_c):+.1f}\%) in {si_fm(time_c[i][j])}s({time_a[i][j]/time_c[i][j]:.2f})
-    {aep_d:.2f}MW({pce(aep_a,aep_d):+.1f}\%) in {si_fm(time_d[i][j])}s({time_a[i][j]/time_d[i][j]:.2f})
-    {aep_e:.2f}MW({pce(aep_a,aep_e):+.1f}\%) in {si_fm(time_e[i][j])}s({time_a[i][j]/time_e[i][j]:.2f})
-    {aep_f:.2f}MW({pce(aep_a,aep_f):+.1f}\%)'''
+    {aep_d:.2f}MW({pce(aep_a,aep_d):+.1f}\%) in {si_fm(time_d[i][j])}s({time_a[i][j]/time_d[i][j]:.2f})'''
 
     ax.text(0.05,0.95,top_left_text,color='black',transform=ax.transAxes,va='top',ha='left',fontsize=4,bbox=props)
+    if EXTRA_INFO: #extra info that is discussed
+        error_text = f'''$C_t$:{errors[0]:+.1f}
+        $C_p$:{errors[1]:+.1f}
+        Xt1:{errors[2]:+.1f}
+        SA:{errors[3]:+.1f}
+        Sum:{np.sum(errors[:4]):+.1f}
+        '''
+        ax.text(0.05,0.05,error_text,color='black',transform=ax.transAxes,va='bottom',ha='left',fontsize=4,bbox=props)
 
     if i == 4 and j == 2:
         cax.set_xlabel('Percentage Error in AEP / \%',labelpad=2)
@@ -233,7 +256,7 @@ for i in range(ROWS):
     for j in range(COLS): #then onto the contours
         Z2 = pce(powj_a[i][j], powj_d[i][j])
         xt,yt = layout[i][j][:,0],layout[i][j][:,1]
-        cf = nice_composite_plot_v03(fig,gs,i,j,Uwff_b[i][j].reshape(X.shape),X,Y,Z2,xt,yt,cont_lim=cont_lim) 
+        cf = nice_composite_plot_v03(fig,gs,i,j,Uwff_b[i][j].reshape(X.shape),X,Y,Z2,xt,yt,errors[i,j,:],cont_lim=cont_lim) 
 
 ill_cb(gs[6,1:],cont_lim) #'illustrative' colourbar on bottom row
 
@@ -244,8 +267,8 @@ if SAVE_FIG:
     from pathlib import Path
 
     current_file_path = Path(__file__)
-    fig_dir = current_file_path.parent.parent / "extra evaluations"
-    fig_name = f"Fig_FarmEval_simple_{site_str}_{layout_str}.png"
+    fig_dir = current_file_path.parent.parent / "fig images"
+    fig_name = f"Fig_FarmEval_{site_str}_{layout_str}.png"
     path_plus_name = fig_dir / fig_name
     
     plt.savefig(path_plus_name, dpi='figure', format='png', bbox_inches='tight')

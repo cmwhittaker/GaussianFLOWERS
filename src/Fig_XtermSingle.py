@@ -1,3 +1,5 @@
+#%% this is a simple, single direction case study 
+
 #%% set font!
 from matplotlib import rc
 rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
@@ -24,22 +26,12 @@ EXTENT = 14 #extent of rectangular domain
 XRES = 300 #number of x points in the contourf meshgrid
 YRES = 101 #must be odd so centerline can be picked later on
 
-def impulse_wr():
-    #single direction wind rose (for reference)
-    U_i = np.ones(360,)*U_inf
+def impulse_wr(bin):
+    #single direction ALIGNED
+    U_i = np.ones(720,)*U_inf
     P_i = np.zeros_like(U_i)
-    P_i[270] = 1 #blows from a single wind direction
-    theta_i = np.linspace(0,2*np.pi,360,endpoint=False)
-    return U_i,P_i,theta_i
-
-def custom_wr(Uinf,kappa):
-    U_i = Uinf*np.ones(BINS)
-    theta_i = np.linspace(0,2*np.pi,360,endpoint=False)
-    from scipy.stats import vonmises
-    kappa = 8.0  # concentration parameter
-    mu1 = (3/2)*np.pi # mean direction (in radians)
-    P_i = vonmises.pdf(theta_i, kappa, loc=mu1)
-    P_i = P_i/np.sum(P_i) #normalise for discrete distribution
+    P_i[bin] = 1 #blows from a single wind direction
+    theta_i = np.linspace(0,2*np.pi,720,endpoint=False)
     return U_i,P_i,theta_i
 
 from utilities.turbines import iea_10MW
@@ -47,8 +39,12 @@ turb = iea_10MW()
 Ct_f = turb.Ct_f
 Cp_f = turb.Cp_f
 
-#von mises distributed wind rose with strength U_inf and spread kappa
-U_i,P_i,theta_i = custom_wr(U_inf,8.0)
+ALIGNED = True #pick between algined and not
+if ALIGNED:
+    non_zero_bin = 540
+else:
+    non_zero_bin = 545
+U_i,P_i,theta_i = impulse_wr(non_zero_bin)
 
 from utilities.helpers import linear_layout,rectangular_domain
 xt,yt,layout = linear_layout(NT,SPACING)
@@ -149,6 +145,7 @@ def nice_composite_plot_v02(fig,gs1,gs2,Z1,X,Y,Z2,xt,yt,tpce):
     from matplotlib.ticker import MaxNLocator
     cb.ax.xaxis.set_major_locator(MaxNLocator(5))
 
+
     annotation_txt = f'approx. farm aep (\%error) : ${np.sum(powj_b):.2f}MW({tpce:+.2f}\\%)$'  
     props = dict(boxstyle='round', facecolor='white', alpha=0.8,edgecolor='none',pad=0.1)  
     ax.annotate(annotation_txt, xy=(0.99,0.97), ha='right', va='top',color='black',bbox=props,xycoords='axes fraction',fontsize=9)
@@ -161,8 +158,6 @@ def nice_composite_plot_v02(fig,gs1,gs2,Z1,X,Y,Z2,xt,yt,tpce):
     return cf_grey,ax
 
 def no_jumps_plot(x,y,ax,threshold,ls='-',color='black'):
-
-    # Threshold for the jump in y
 
     # Segments to be plotted
     segments = []
@@ -237,7 +232,7 @@ def connector_lines(fig,ax1,ax2):
 
 def ill_cb2(cf,gs): #illustrative colourbar on zoomed IN
     cax = fig.add_subplot(gs)
-    fig.colorbar(cf,cax=cax, orientation='horizontal',format='%.3g')
+    fig.colorbar(cf,cax=cax, orientation='horizontal',format=f'%.3g')
     #scale_cb(cax,CP_UPPER,CP_LOWER,labels=False) 
     cax.set_xlabel('$\overline{U_w}$ / $ms^{-1}$',labelpad=0)
     return None
@@ -272,7 +267,8 @@ if SAVE_FIG:
 
     current_file_path = Path(__file__)
     fig_dir = current_file_path.parent.parent / "fig images"
-    fig_name = f"Fig_XtermAprx.png"
+    fig_name = f"Fig_XtermSingle_{U_inf}ms_{np.rad2deg(theta_i[non_zero_bin])*10:.0f}.png"
+    image_path = fig_dir / fig_name
     path_plus_name = fig_dir / fig_name
 
     plt.savefig(path_plus_name, dpi='figure', format='png', bbox_inches='tight')

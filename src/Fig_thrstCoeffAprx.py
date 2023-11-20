@@ -6,8 +6,6 @@
 
 import numpy as np
 
-west = True #westerly direction if true
-
 NT = 5 #number of turbines 
 SPACING = 7 
 XPAD = 7 #X pad
@@ -18,7 +16,7 @@ U_LIM = 4
 CP_LOWER = 0
 CP_UPPER = 27
 
-SAVE_FIG = True
+SAVE_FIG = False
 
 from scipy.stats import vonmises
 def combined_wr(U_inf1,U_inf2,kappa):
@@ -51,6 +49,15 @@ def west_wr(U_inf,kappa):
     P_i = P_i/np.sum(P_i) #normalise for discrete distribution
     return U_i,P_i 
 
+def impulse_wr():
+    #single direction wind rose (for reference)
+    U_i = np.ones(360,)*14
+    P_i = np.zeros_like(U_i)
+    P_i[270] = 1 #blows from a single wind direction
+    theta_i = np.linspace(0,2*np.pi,360,endpoint=False)
+    return U_i,P_i
+
+
 from utilities.turbines import iea_10MW
 turb = iea_10MW()
 Ct_f = turb.Ct_f
@@ -58,18 +65,20 @@ Ct_f = turb.Ct_f
 theta_i = np.linspace(0,2*np.pi,BINS,endpoint=False)
 
 kappa = 8.0
-U_ic,P_ic = combined_wr(5,14,kappa)
+U_ic,P_ic = combined_wr(5,14,kappa) #the combined rose
+U_ic,P_ic = impulse_wr() #the combined rose
 
 from utilities.helpers import linear_layout,rectangular_domain,pce,get_WAV_pp
 #the thrust coefficient is based on the combined wind rose
 WAV_CT = get_WAV_pp(U_ic,P_ic,turb,turb.Ct_f)
-
+west = False #westerly direction if true
 if west:
-    a_0 = 6
+    a_0 = 7
     U_i,P_i = west_wr(a_0,kappa)
 else: #otherwise easterly
     a_0 = 14
     U_i,P_i = east_wr(a_0,kappa)
+U_i,P_i = impulse_wr()
 
 xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,xlims,ylims = rectangular_domain(layout,xr=300)
