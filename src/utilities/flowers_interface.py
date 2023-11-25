@@ -96,8 +96,9 @@ class FlowersInterface():
         R = np.sqrt(xx**2 + yy**2)
         THETA = np.arctan2(yy,xx) / (2 * np.pi)
 
+        # Set up mask for rotor swept area
         mask_area = np.array(R <= 0.5, dtype=int)
-        mask_val = u0
+        mask_val = self.fs.c[0]
 
         # Critical polar angle of wake edge (as a function of distance from turbine)
         theta_c = np.arctan(
@@ -106,10 +107,9 @@ class FlowersInterface():
             ) / (2 * np.pi)
         theta_c = np.nan_to_num(theta_c)
         
-        # Contribution from zero-frequency Fourier mode
-        du = self.fs.a[0] * theta_c / (2 * self.k * R + 1)**2 * (
-            1 + (8 * np.pi**2 * theta_c**2 * self.k * R) / (3 * (2 * self.k * R + 1)))
-        #du = np.where(R>=0.5,du,u0)      
+        # # Contribution from zero-frequency Fourier mode
+        # du = self.fs.a[0] * theta_c / (2 * self.k * R + 1)**2 * (
+        #     1 + (8 * np.pi**2 * theta_c**2 * self.k * R) / (3 * (2 * self.k * R + 1)))
         
         # Initialize gradient and calculate zero-frequency modes
         if gradient == True:
@@ -124,12 +124,11 @@ class FlowersInterface():
                     3 * self.fs.a[0] * (1 + 2 * self.k * R) * (1 + 2 * self.k * R + 8 * np.pi**2 * self.k * R * theta_c**2) * dtdr) / (
                 3 * (1 + 2*self.k*R)**4)
 
-
-
         # Reshape variables for vectorized calculations
-        m = np.arange(1, len(self.fs.b))
-        a = self.fs.a[None, None,1:] 
-        b = self.fs.b[None, None,1:] 
+        # (these don't need tiling, np will broadcast)
+        m = np.arange(0, len(self.fs.b))
+        a = self.fs.a[None, None,:] 
+        b = self.fs.b[None, None,:] 
         R = R[:, :, None]
         THETA = THETA[:, :, None] 
         theta_c = theta_c[:, :, None] 
@@ -140,14 +139,17 @@ class FlowersInterface():
         t_pi_m_T = t_pi_m * THETA
         t_pi_m_tc = t_pi_m * theta_c
         s_t_pi_m_tc = np.sin(t_pi_m_tc)
-                # Set up mask for rotor swept area
+
+        #all Fourier modes
 
         # Vectorized contribution of higher Fourier modes
-        du += np.sum((1 / (pi_m * (2 * self.k * R + 1)**2) * (
+        du = np.nansum((1 / (pi_m * (2 * self.k * R + 1)**2) * (
             a * np.cos(t_pi_m_T) + b * np.sin(t_pi_m_T)) * (
                 s_t_pi_m_tc + 2 * self.k * R / (m**2 * (2 * self.k * R + 1)) * (
                     ((t_pi_m_tc)**2 - 2) * s_t_pi_m_tc + 2*t_pi_m_tc*np.cos(t_pi_m_tc)))), axis=2)
 
+        #  
+        # du = np.nansum((2*((self.k*m**2*R*theta_c**2 + self.k*(m**2 - 2)*R + m**2)*np.sin(m*theta_c) + 2*self.k*m*R*theta_c*np.cos(m*theta_c))*(b*np.sin(m*THETA) + a*np.cos(m*THETA)))/(m**3*(self.k*R + 1)**3),axis=2)
         if gradient==True:
             dtdr = np.tile(np.expand_dims(dtdr, axis=2),len(m))
             
@@ -243,6 +245,7 @@ class FlowersInterface():
         c1ft = 2 * np.fft.rfft(c1)
         a =  c1ft.real
         b = -c1ft.imag
+        a[0] = a[0]
 
         # Truncate Fourier series to specified number of modes
         if num_terms > 0 and num_terms <= len(a):

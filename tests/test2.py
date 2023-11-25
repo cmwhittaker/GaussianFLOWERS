@@ -23,7 +23,7 @@ U_inf1 = 15
 U_inf2 = 13
 U_i = np.array((U_inf1,U_inf2,))
 P_i = np.array((0.7,0.3,))
-theta_i = np.array((0,np.pi/2,))
+theta_WB_i = np.array((0,np.pi/2,))
 from utilities.helpers import get_WAV_pp
 wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
 wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
@@ -68,6 +68,8 @@ P_e =  3*Pwr_NC(U_i[1],DU_eT1T2T3)+Pwr_NC(U_i[1],DU_eT0)
 #Next check num_Fs is giving the same result
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 #cnst thrust coeff (Ct_op=3),global power coeff (Cp_op=2), exclude cross terms (cross_ts=False), approx wake deficit (ex=False)
+from utilities.helpers import trans_bearing_to_polar
+U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
 from utilities.AEP3_functions import num_Fs,ntag_PA
 pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
                    layout,layout,
@@ -115,11 +117,11 @@ for i in range(12):
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
         U_i,P_i = get_floris_wind_rose(i+1,wd=np.arange(0, 360, 1))
-        theta_i = np.linspace(0,2*np.pi,len(U_i))
+        theta_WB_i = np.linspace(0,2*np.pi,len(U_i))
         _,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi)))
         wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
 
-        pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
+        pow_j1,_,_ = num_Fs(U_i,P_i,theta_WB_i,
                         layout,layout,
                         turb,
                         K,

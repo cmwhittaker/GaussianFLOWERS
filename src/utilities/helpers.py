@@ -26,7 +26,7 @@ def deltaU_by_Uinf_f(r,theta,Ct,K,u_lim,ex):
         U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
         deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
     else: #otherwise use small angle approximations
-        theta = np.mod(theta-np.pi,2*np.pi)-np.pi
+        theta = np.mod(theta-np.pi,2*np.pi)-np.pi #fix domain
         U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*1+ep)**2))))*(np.exp(-(r*theta)**2/(2*(K*r*1+ep)**2)))          
         deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit 
         return deltaU_by_Uinf      
@@ -72,16 +72,18 @@ def fixed_rectangular_domain(extent,r=200):
 
 def find_relative_coords(layout,plot_points):
     #find the r, theta coordinates relative to each turbine
-    xt_j,yt_j = layout[:,0],layout[:,1]
-    xt_k,yt_k = plot_points[:,0],plot_points[:,1]
+    xt_n,yt_n = layout[:,0],layout[:,1]
+    xt_m,yt_m = plot_points[:,0],plot_points[:,1]
 
-    x_jk = xt_k[:, None] - xt_j[None, :]
-    y_jk = yt_k[:, None] - yt_j[None, :]
+    x_nm = xt_n[None, :] - xt_m[:, None] 
+    y_nm = yt_n[None, :] - yt_m[:, None]
 
-    r_jk = np.sqrt(x_jk**2+y_jk**2)
-    theta_jk = np.arctan2(x_jk,y_jk) #clockwise +ve from +ve y axis
+    r_nm = np.sqrt(x_nm**2+y_nm**2)
+    theta_nm = np.arctan2(y_nm,x_nm) #clockwise -ve from x axis
 
-    return r_jk,theta_jk  
+    #should really remove diagonal elements
+
+    return r_nm,theta_nm  
 
 def simple_Fourier_coeffs(data):   
     # naively fit a Fourier series to data (no normalisation takes place (!))
@@ -118,6 +120,19 @@ def get_WAV_pr(U_i,P_i,f):
     WAV = np.sum(f(U_i)*P_i)
     return WAV
 
+def trans_bearing_to_polar(U_i,P_i,theta_WB_i):
+    #converts wind bearing theta_WB_i to polar angle theta_i
+    #fixes domain, and then re-sorts U_i and P_i to match
+    theta_i = 3*np.pi/2 - theta_WB_i #convert to polar
+    theta_i = np.mod(theta_i-np.pi,2*np.pi)-np.pi #fix domain
+
+    srt_idx = np.argsort(theta_i) #re-sort using transformed
+    theta_i = theta_i[srt_idx]
+    U_i = U_i[srt_idx]
+    P_i = P_i[srt_idx]
+
+    return U_i,P_i,theta_i
+
 from floris.tools import WindRose
 def get_floris_wind_rose(site_n,**kwargs):
     #use floris to parse wind rose toolkit site data
@@ -130,9 +145,13 @@ def get_floris_wind_rose(site_n,**kwargs):
     fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
     wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
-    U_i = wr.ws
-    P_i = wr.freq_val
-    return np.array(U_i),np.array(P_i),fl_wr
+    U_i = wr.ws #(average) wind speeds
+    P_i = wr.freq_val 
+    theta_WB_i = np.deg2rad(wr.wd) #wind direction bearing (in radians)
+    #convert wind bearings to polar angle (and re-sort, U_i)
+    U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
+    
+    return U_i,P_i,theta_i,fl_wr
 
 #signed percentage error
 def pce(exact,approx):

@@ -48,7 +48,6 @@ def floris_FULL_timed_aep(fl_wr, thetaD_i, layout, turb, wake=True, timed=True):
 
     return pow_j/(1*10**6), time
 
-
 def floris_AV_timed_aep(U_i, P_i, thetaD_i, layout, turb, wake=True, timed=True):
     """ 
     calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml". 
@@ -151,26 +150,31 @@ def num_Fs(U_i,P_i,theta_i,
     if np.any(np.abs(theta_i) > 10): #this is needed ... 
         raise ValueError("Did you give num_F degrees?")
         
-    def get_sort_index(layout,rot):
-        #rotate layout coordinates by rot clockwise +ve (in radians)
-        #returns sort_index, which is used to index the layout by the furthest upwind turbine for rotation rot
-        Xt,Yt = layout[:,0],layout[:,1]
-        rot_Xt = Xt * np.cos(rot) + Yt * np.sin(rot)
-        rot_Yt = -Xt * np.sin(rot) + Yt * np.cos(rot) 
-        layout = np.column_stack((rot_Xt.reshape(-1),rot_Yt.reshape(-1)))
-        sort_index = np.argsort(-layout[:, 1]) #sort index, with furthest upwind first
+    def get_sort_index(layout,theta_i):
+        #sorts turbines from furthest upwind in wind orientated frame           
+        def rotate_layout(layout,rot):
+            #rotates layout anticlockwise by angle rot 
+            Xt,Yt = layout[:,0],layout[:,1]
+            rot_Xt = Xt * np.cos(rot) - Yt * np.sin(rot)
+            rot_Yt = Xt * np.sin(rot) + Yt * np.cos(rot) 
+            layout_r = np.column_stack((rot_Xt.reshape(-1),rot_Yt.reshape(-1)))
+            return layout_r
+        #from wind orientated frame, rotation is opposite
+        layout_r = rotate_layout(layout,-theta_i)
+
+        sort_index = np.argsort(layout_r[:, 1]) #sort index, with furthest upwind (x_n < x_{n+1}) first
         return sort_index
     
     def soat(a): #Sum over Axis Two (superposistion axis sum)
         return np.sum(a,axis=2)
 
-    Xt,Yt = layout[:,0],layout[:,1]
+    x_n,y_n = layout[:,0],layout[:,1]
     X,Y = plot_points[:,0],plot_points[:,1] #flatten arrays
 
-    DUt_ijk = np.zeros((len(U_i),len(Xt),len(Xt)))
-    Uwt_ij = U_i[:,None]*np.ones((1,Xt.shape[0])) #turbine Uws
+    DUt_ijk = np.zeros((len(U_i),len(x_n),len(x_n)))
+    Uwt_ij = U_i[:,None]*np.ones((1,x_n.shape[0])) #turbine Uws
 
-    DUff_ijk = np.zeros((len(U_i),len(X),len(Xt)))
+    DUff_ijk = np.zeros((len(U_i),len(X),len(x_n)))
     Uwff_ij = U_i[:,None]*np.ones(((1,X.shape[0])))
     
     #the actual calculation loop
@@ -179,18 +183,18 @@ def num_Fs(U_i,P_i,theta_i,
         sort_index = get_sort_index(layout,-theta_i[i]) #find
         layout = layout[sort_index] #and reorder based on furthest upwind
         
-        for k in range(len(Xt)): #for each turbine in superposistion
-            xt, yt = layout[k,0],layout[k,1]       
+        for m in range(len(x_n)): #for each turbine in superposistion
+            x_m, x_m = layout[m,0],layout[m,1]       
             #calculate relative turbine locations
-            Rt = np.sqrt((Xt-xt)**2+(Yt-yt)**2)
-            THETAt = np.pi/2 - np.arctan2(Yt-yt,Xt-xt) - theta_i[i]
+            Rt = np.sqrt((x_n-x_m)**2+(y_n-x_m)**2)
+            THETAt = np.arctan2(y_n-x_m,x_n-x_m) - theta_i[i] 
             #calculate relative plot_points (flow field ff) locations
-            Rff = np.sqrt((X-xt)**2+(Y-yt)**2)
-            THETAff = np.pi/2 - np.arctan2(Y-yt,X-xt) - theta_i[i]
+            Rff = np.sqrt((X-x_m)**2+(Y-x_m)**2)
+            THETAff = np.arctan2(Y-x_m,X-x_m) - theta_i[i]
             
             #then there are a few ways of defining the thrust coefficient
             if Ct_op == 1: #base on local velocity
-                Ct = turb.Ct_f(Uwt_ij[i,k])
+                Ct = turb.Ct_f(Uwt_ij[i,m])
             elif Ct_op == 2: #base on global inflow
                 Ct = turb.Ct_f(U_i[i]) 
             elif Ct_op == 3: #based on some constant
@@ -200,11 +204,11 @@ def num_Fs(U_i,P_i,theta_i,
             else:
                 raise ValueError("Ct_op is not supported")
 
-            DUt_ijk[i,:,k] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K,u_lim,ex)
-            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,k] #sum over superposistion for each turbine (turbine U_ws)            
-            DUff_ijk[i,:,k] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K,u_lim,ex)
+            DUt_ijk[i,:,m] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K,u_lim,ex)
+            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,m] #sum over superposistion for each turbine (turbine U_ws)            
+            DUff_ijk[i,:,m] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K,u_lim,ex)
             
-            Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,k] #sum over superposistion for eah turbine (flow field)
+            Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,m] #sum over superposistion for eah turbine (flow field)
     
     num_Fs.DUt_ijk = DUt_ijk #debugging
     num_Fs.DUff_ijk = DUff_ijk #(slightly hacky) this is for the cross-term plot (i don't want to change the signature just for this one use case)
@@ -341,14 +345,13 @@ def ntag_PA(Fourier_coeffs3_PA,
         alpha (nt,2) | (plot_points,2) : "energy content" (Cp(U)*P*U**3) of the wind at turbine locations or plot_points
     """
     r_jk,theta_jk = find_relative_coords(layout1,layout2)  #find relative posistions
-    theta_jk = theta_jk - np.pi #wake lies opposite
+    theta_jk = theta_jk + np.pi #wake lies opposite
     theta_jk = np.mod(theta_jk + np.pi, 2 * np.pi) - np.pi #fix domain
-    #is this necessary?!
 
     A_n,Phi_n = Fourier_coeffs3_PA
     a_0 = 2*A_n[0] #because A_n[0] = a_0 / 2
 
-    EP = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
+    EP = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct))) #initial wake expansion parameter
 
     #auxilaries 
     n = np.arange(0,A_n.size,1)

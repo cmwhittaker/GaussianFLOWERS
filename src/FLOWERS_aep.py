@@ -41,6 +41,77 @@ K = 0.05
 Nterms = 36
 flower_int = FlowersInterface(U_i,P_i,thetaD_i, layout, turb,num_terms=Nterms+1, k=K) 
 print(np.sum(flower_int.calculate_aep())/10**6)
+
+#%% my own function to do the flowers calculations
+
+ct = self.turb.Ct_f(self.U_i)
+cp = self.turb.Cp_f(self.U_i)
+
+# Normalize wind speed by cut-out speed
+nU_i = self.U_i/self.U #(new variable to allow multiple runnings without reinitalisation)
+
+# Average freestream term
+c = np.sum(cp**(1/3) * nU_i * self.P_i)
+
+# Fourier expansion of wake deficit term
+data = turb.Cp_f(U_i) * (1 - np.sqrt(1 - turb.Ct_f(U_i))) * P_i
+from utilities.helpers import simple_Fourier_coeffs
+Fourier_coeffs,_ = simple_Fourier_coeffs(data)
+a_0,a_n,b_n = Fourier_coeffs
+r_jk,theta_jk = find_relative_coords(layout1,layout2)
+
+du = np.nansum((1 / (pi_m * (2 * self.k * R + 1)**2) * (
+            a * np.cos(t_pi_m_T) + b * np.sin(t_pi_m_T)) * (
+                s_t_pi_m_tc + 2 * self.k * R / (m**2 * (2 * self.k * R + 1)) * (
+                    ((t_pi_m_tc)**2 - 2) * s_t_pi_m_tc + 2*t_pi_m_tc*np.cos(t_pi_m_tc)))), axis=2)
+
+#%% need a function to sort
+from utilities.helpers import get_floris_wind_rose
+U_i,P_i,theta_i,fl_wr = get_floris_wind_rose(6)
+
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+ax.scatter(theta_i,U_i*P_i)
+ax.set_theta_zero_location('E')
+
+#%%
+a = np.linspace(0,10,100)
+b = np.linspace(0,10,100)
+
+
+#%%
+
+def trans_bearing_to_polar(theta_WB_i,U_i,P_i):
+    
+    theta_i2 = np.pi/2 - theta_WB_i #convert to polar
+    theta_i2 = np.mod(theta_i2-np.pi,2*np.pi)-np.pi #fix domain
+
+    srt_idx = np.argsort(theta_i2) #re-sort using transformed
+    theta_i2 = theta_i2[srt_idx]
+    U_i = U_i[srt_idx]
+    P_i = P_i[srt_idx]
+
+    return theta_i2,U_i,P_i
+
+a,b,c = trans_bearing_to_polar(theta_i,U_i,P_i)
+fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+ax.plot(a,b*c)
+ax.set_theta_zero_location('E')
+
+#%%
+from utilities.helpers import get_floris_wind_rose
+a,b,c = get_floris_wind_rose(5)
+
+#%%
+x = np.linspace(-10,10,300)
+y = x
+y1  = np.mod(x-np.pi,2*np.pi)-np.pi
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.set(aspect='equal')
+ax.plot(x,y)
+ax.plot(x,y1)
+#need to convert to the "standard coordinate system"
 #%%
 from utilities.AEP3_functions import ntag_PA
 #ntag (No cross Terms Analytical Gaussian) (aep+time)
@@ -55,6 +126,57 @@ aep_func_d = lambda: ntag_PA(Fourier_coeffs3_PA,
 (powj_d,_),time_2 = adaptive_timeit(aep_func_d,timed=True)
 aep2 = np.sum(powj_d)
 print(f'GFLOWERS: {aep2:.2f} in {si_fm(time_2)}')
+#%%
+
+layout = np.array([[0,0],[3,0],[10,0]])
+
+def get_sort_index(layout,theta_i):
+    #sorts turbines from furthest upwind in wind orientated frame           
+    def rotate_layout(layout,rot):
+        #rotates layout anticlockwise by angle rot 
+        Xt,Yt = layout[:,0],layout[:,1]
+        rot_Xt = Xt * np.cos(rot) - Yt * np.sin(rot)
+        rot_Yt = Xt * np.sin(rot) + Yt * np.cos(rot) 
+        layout_r = np.column_stack((rot_Xt.reshape(-1),rot_Yt.reshape(-1)))
+        return layout_r
+    #from wind orientated frame, rotation is opposite
+    layout_r = rotate_layout(layout,-theta_i)
+
+    sort_index = np.argsort(layout_r[:, 1]) #sort index, with furthest upwind (<x) first
+    return sort_index
+
+theta_i = 89
+thetaR_i = np.deg2rad(theta_i)
+indx = get_sort_index(layout,thetaR_i)
+layout_n = layout[indx]
+
+print(indx)
+
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(5,5),dpi=200)
+ax.set(xlim=(-15,15),ylim=(-15,15))
+ax.scatter(layout_n[:,0],layout_n[:,1])
+for i in range(layout.shape[0]):
+    ax.annotate(str(indx[i]),(layout_n[i,0],layout_n[i,1]))
+
+#%%
+names = ['t1:','t2:','t3:']
+layout_sort = layout[indx]
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(5,5),dpi=200)
+ax.scatter(layout_sort[:,0],layout_sort[:,1])
+ax.set_aspect('equal')
+for i in range(layout.shape[0]):
+    ax.annotate(names[i]+str(indx[i]),(layout[i,0],layout[i,1]))
+#%%
+ax.plot([0,-np.cos(thetaR_i)],[0,-np.sin(thetaR_i)])
+labels = [str(_) for _ in indx]
+
+
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(5,5),dpi=200)
+ax.set(aspect='equal')
+ax.scatter(a,b)
 #%%
 from utilities.flowers_interface import FlowersInterface
 a = FlowersInterface(1,2,3,4,5)

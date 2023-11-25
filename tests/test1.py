@@ -3,7 +3,7 @@
 # subject to
 # U_i = [15,13]
 # P_i = [0.7,0.3]
-# theta_i = [0,np.pi/2]
+# theta_i = [0,np.pi/2] (wind bearings)
 
 import sys
 import os
@@ -22,7 +22,7 @@ K=0.03 #wake expansion rate
 alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
 U_i = np.array((15,13,))
 P_i = np.array((0.7,0.3))
-theta_i = np.array((0,np.pi/2))
+theta_WB_i = np.array((0,np.pi/2))
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 
 #simple implementation of the Gaussian wake model
@@ -57,6 +57,9 @@ Uw_eT0T12 = U_i[1]
 Uw_eT2 = U_i[1]*(1-U_delta(0,3,Uw_eT0T12))
 #Total power is found from the wake velocities
 P_e =  3*Pwr(Uw_eT0T12)+Pwr(Uw_eT2)
+
+from utilities.helpers import trans_bearing_to_polar
+U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
 
 #Next check num_Fs is giving the same result
 #local thrust coeff (Ct_op=1),local power coeff (Cp_op=1), include cross terms (cross_ts=True), exact wake deficit (ex=True)
