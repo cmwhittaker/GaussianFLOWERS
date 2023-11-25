@@ -96,9 +96,8 @@ class FlowersInterface():
         R = np.sqrt(xx**2 + yy**2)
         THETA = np.arctan2(yy,xx) / (2 * np.pi)
 
-        # Set up mask for rotor swept area
         mask_area = np.array(R <= 0.5, dtype=int)
-        mask_val = self.fs.c[0]
+        mask_val = u0
 
         # Critical polar angle of wake edge (as a function of distance from turbine)
         theta_c = np.arctan(
@@ -110,6 +109,7 @@ class FlowersInterface():
         # Contribution from zero-frequency Fourier mode
         du = self.fs.a[0] * theta_c / (2 * self.k * R + 1)**2 * (
             1 + (8 * np.pi**2 * theta_c**2 * self.k * R) / (3 * (2 * self.k * R + 1)))
+        #du = np.where(R>=0.5,du,u0)      
         
         # Initialize gradient and calculate zero-frequency modes
         if gradient == True:
@@ -124,25 +124,29 @@ class FlowersInterface():
                     3 * self.fs.a[0] * (1 + 2 * self.k * R) * (1 + 2 * self.k * R + 8 * np.pi**2 * self.k * R * theta_c**2) * dtdr) / (
                 3 * (1 + 2*self.k*R)**4)
 
+
+
         # Reshape variables for vectorized calculations
         m = np.arange(1, len(self.fs.b))
-        a = np.swapaxes(np.tile(np.expand_dims(self.fs.a[1:], axis=(1,2)),np.shape(R.T)),0,2)
-        b = np.swapaxes(np.tile(np.expand_dims(self.fs.b[1:], axis=(1,2)),np.shape(R.T)),0,2)
-        R = np.tile(np.expand_dims(R, axis=2),len(m))
-        THETA = np.tile(np.expand_dims(THETA, axis=2),len(m))
-        theta_c = np.tile(np.expand_dims(theta_c, axis=2),len(m))
+        a = self.fs.a[None, None,1:] 
+        b = self.fs.b[None, None,1:] 
+        R = R[:, :, None]
+        THETA = THETA[:, :, None] 
+        theta_c = theta_c[:, :, None] 
 
         # Auxilaries (pretty rudimentary)
         pi_m = np.pi * m
         t_pi_m = 2*pi_m
         t_pi_m_T = t_pi_m * THETA
         t_pi_m_tc = t_pi_m * theta_c
+        s_t_pi_m_tc = np.sin(t_pi_m_tc)
+                # Set up mask for rotor swept area
 
         # Vectorized contribution of higher Fourier modes
         du += np.sum((1 / (pi_m * (2 * self.k * R + 1)**2) * (
             a * np.cos(t_pi_m_T) + b * np.sin(t_pi_m_T)) * (
-                np.sin(t_pi_m_tc) + 2 * self.k * R / (m**2 * (2 * self.k * R + 1)) * (
-                    ((t_pi_m_tc)**2 - 2) * np.sin(t_pi_m_tc) + 4*np.pi*m*theta_c*np.cos(t_pi_m_tc)))), axis=2)
+                s_t_pi_m_tc + 2 * self.k * R / (m**2 * (2 * self.k * R + 1)) * (
+                    ((t_pi_m_tc)**2 - 2) * s_t_pi_m_tc + 2*t_pi_m_tc*np.cos(t_pi_m_tc)))), axis=2)
 
         if gradient==True:
             dtdr = np.tile(np.expand_dims(dtdr, axis=2),len(m))

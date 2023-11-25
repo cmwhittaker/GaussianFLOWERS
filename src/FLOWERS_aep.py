@@ -8,6 +8,11 @@ if hasattr(sys, 'ps1'):
     %load_ext autoreload
     %autoreload 2
 
+import warnings
+
+# Suppress all runtime warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
@@ -26,6 +31,17 @@ aep1 = np.sum(pow_z)
 from utilities.helpers import simple_Fourier_coeffs,get_WAV_pp
 _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/(2*np.pi))
 wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
+
+from utilities.plotting_funcs import si_fm
+print(f'JFLOWERS: {aep1:.2f} in {si_fm(time_1)}')
+
+#%% 
+from utilities.flowers_interface import FlowersInterface
+K = 0.05
+Nterms = 36
+flower_int = FlowersInterface(U_i,P_i,thetaD_i, layout, turb,num_terms=Nterms+1, k=K) 
+print(np.sum(flower_int.calculate_aep())/10**6)
+#%%
 from utilities.AEP3_functions import ntag_PA
 #ntag (No cross Terms Analytical Gaussian) (aep+time)
 aep_func_d = lambda: ntag_PA(Fourier_coeffs3_PA,
@@ -38,11 +54,7 @@ aep_func_d = lambda: ntag_PA(Fourier_coeffs3_PA,
                                     wav_Ct)
 (powj_d,_),time_2 = adaptive_timeit(aep_func_d,timed=True)
 aep2 = np.sum(powj_d)
-
-from utilities.plotting_funcs import si_fm
-print(f'JFLOWERS: {aep1:.2f} in {si_fm(time_1)}')
 print(f'GFLOWERS: {aep2:.2f} in {si_fm(time_2)}')
-
 #%%
 from utilities.flowers_interface import FlowersInterface
 a = FlowersInterface(1,2,3,4,5)
