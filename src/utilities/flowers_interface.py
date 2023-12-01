@@ -76,7 +76,7 @@ class FlowersInterface():
     def get_num_modes(self):
         return len(self.fs)
     
-    def calculate_aep(self, gradient=False):
+    def calculate_aep(self):
         """
         Compute farm AEP (and Cartesian gradients) for the given layout and wind rose.
         
@@ -151,8 +151,9 @@ class FlowersInterface():
         """
 
         # Transform wind direction to polar angle 
-        self.theta_i = np.remainder(450 - self.theta_i, 360)
-
+        self.theta_i = 270 - self.theta_i #previously 450
+        self.theta_i = np.remainder(self.theta_i, 360)
+        # 450 is 360 + 90 so effectively 90 - theta
         # Get the indices that would sort theta_i
         sorted_indices = np.argsort(self.theta_i)
 
@@ -170,18 +171,19 @@ class FlowersInterface():
         self.c_0 = 2*np.sum(self.U_i * self.P_i)/(2*np.pi)
         # Fourier expansion of wake deficit term
         c1 = ((1 - np.sqrt(1 - ct)) * self.U_i* self.P_i)/(2*np.pi)
+        print("len(c1): {}".format(len(c1)))
         c1ft = 2 * np.fft.rfft(c1)
         a =  c1ft.real
         b = -c1ft.imag
-        # print("c: {}".format(c))
-        # print("a: {}".format(a))
-        # print("b: {}".format(b))
+        print("len(a): {}".format(len(a)))
+        print("num_terms: {}".format(num_terms))
 
         self.a_0 = a[0]
 
         # Truncate Fourier series to specified number of modes
         if num_terms > 0 and num_terms <= len(a):
             a = a[0:num_terms+1] #dc is the 0 term
+            print("len(a): {}".format(len(a)))
             b = b[0:num_terms+1]
         else:
             if num_terms > 0 :

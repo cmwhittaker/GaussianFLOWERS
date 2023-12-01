@@ -118,16 +118,18 @@ def get_WAV_pr(U_i,P_i,f):
     WAV = np.sum(f(U_i)*P_i)
     return WAV
 
-def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i):
+def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i,off=0):
     #converts wind bearing theta_WB_i to polar angle theta_i
     #fixes domain, and then re-sorts U_WB_i and P_WB_i to match
-    theta_i = 3*np.pi/2 - theta_WB_i #convert to polar
-    theta_i = np.mod(theta_i-np.pi,2*np.pi)-np.pi #fix domain
+    theta_i = 3*np.pi/2 - theta_WB_i#convert to polar
+    theta_i = np.mod(theta_i,2*np.pi) #fix from 0 to 2pi
 
     srt_idx = np.argsort(theta_i) #re-sort using transformed theta
     theta_i = theta_i[srt_idx]
     U_i = U_WB_i[srt_idx]
     P_i = P_WB_i[srt_idx]
+
+     #fix domain
 
     return U_i,P_i,theta_i
 
@@ -143,13 +145,30 @@ def get_floris_wind_rose(site_n,**kwargs):
     fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
     wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
-    U_i = wr.ws #(average) wind speeds
-    P_i = wr.freq_val 
+    U_WB_i = wr.ws #(average) wind speeds
+    P_WB_i = wr.freq_val 
     theta_WB_i = np.deg2rad(wr.wd) #wind direction bearing (in radians)
     #convert wind bearings to polar angle (and re-sort, U_i)
-    U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
+    U_i,P_i,theta_i = trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i)
     
     return np.array(U_i),np.array(P_i),np.array(theta_i),fl_wr
+
+def get_floris_wind_rose_WB(site_n,**kwargs):
+    #use floris to parse wind rose toolkit site data
+    #(each site has its own folder)
+    from pathlib import Path
+    current_file_path = Path(__file__)
+    folder_name = current_file_path.parent.parent.parent/ "data" / "WindRoseData_D" / ("site"+str(site_n))
+
+    fl_wr = WindRose()
+    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
+    wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
+    wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
+    U_WB_i = wr.ws #(average) wind speeds
+    P_WB_i = wr.freq_val 
+    theta_WB_i = np.deg2rad(wr.wd) #wind direction bearing (in radians)
+    
+    return np.array(U_WB_i),np.array(P_WB_i),np.array(theta_WB_i),fl_wr
 
 #signed percentage error
 def pce(exact,approx):
