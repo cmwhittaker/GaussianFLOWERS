@@ -57,6 +57,8 @@ Uw_eT0T12 = U_i[1]
 Uw_eT2 = U_i[1]*(1-U_delta(0,3,Uw_eT0T12))
 #Total power is found from the wake velocities
 P_e =  3*Pwr(Uw_eT0T12)+Pwr(Uw_eT2)
+# === Total power ===
+simple_aep = P_i[0]*P_n+P_i[1]*P_e
 
 from utilities.helpers import trans_bearing_to_polar
 U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
@@ -72,7 +74,7 @@ pow_j,_,_ = num_Fs(U_i,P_i,theta_i,
                    Cp_op=1,
                    cross_ts=True,ex=True)
 print("=== Test 1 ===")
-print(f"simple aep: {P_i[0]*P_n+P_i[1]*P_e:.6f}")
+print(f"simple aep: {simple_aep:.6f}")
 print(f"num_F  aep: {np.sum(pow_j):.6f}")
 
 

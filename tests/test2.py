@@ -1,6 +1,13 @@
 #%% 
 # 7 shaped layout with ntag + num_F
 # subject to
+# layout: np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+# looks like:
+# x        x
+#          
+#         x
+# 
+#        x
 # U_i = [15,13]
 # P_i = [0.7,0.3]
 # theta_i = [0,np.pi/2]
@@ -21,11 +28,11 @@ alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
 
 U_inf1 = 15
 U_inf2 = 13
-U_i = np.array((U_inf1,U_inf2,))
-P_i = np.array((0.7,0.3,))
+U_WB_i = np.array((U_inf1,U_inf2,))
+P_WB_i = np.array((0.7,0.3,))
 theta_WB_i = np.array((0,np.pi/2,))
 from utilities.helpers import get_WAV_pp
-wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
+wav_Ct = get_WAV_pp(U_WB_i,P_WB_i,turb,turb.Ct_f)
 wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
 #first, start with a simple implementation 
@@ -55,7 +62,7 @@ DU_nT2 = U_delta_SA(0.2,3)
 #T3 is waked by T1 and T2
 DU_nT3 = np.array((U_delta_SA(0.4,6),U_delta_SA(0.2,3)))
 #Total power is found from the wake velocities
-P_n =  2*Pwr_NC(U_i[0],DU_nT0T1) + Pwr_NC(U_i[0],DU_nT2) + Pwr_NC(U_i[0],DU_nT3)
+P_n =  2*Pwr_NC(U_WB_i[0],DU_nT0T1) + Pwr_NC(U_WB_i[0],DU_nT2) + Pwr_NC(U_WB_i[0],DU_nT3)
 
 # === East @ U_inf2 ===
 #T1,T2,T3 are unwaked
@@ -63,13 +70,16 @@ DU_eT1T2T3 = 0
 #T0 is waked by T1
 DU_eT0 = U_delta_SA(0,3)
 #Total power is found from the wake velocities
-P_e =  3*Pwr_NC(U_i[1],DU_eT1T2T3)+Pwr_NC(U_i[1],DU_eT0)
+P_e =  3*Pwr_NC(U_WB_i[1],DU_eT1T2T3)+Pwr_NC(U_WB_i[1],DU_eT0)
+
+# === Total power ===
+simple_aep = P_WB_i[0]*P_n+P_WB_i[1]*P_e
 
 #Next check num_Fs is giving the same result
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 #cnst thrust coeff (Ct_op=3),global power coeff (Cp_op=2), exclude cross terms (cross_ts=False), approx wake deficit (ex=False)
 from utilities.helpers import trans_bearing_to_polar
-U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
+U_i,P_i,theta_i = trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i)
 from utilities.AEP3_functions import num_Fs,ntag_PA
 pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
                    layout,layout,
@@ -82,17 +92,20 @@ pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
 #Next check ntag gives the same result
 def new_wr1(no_bins):
     # ntag needs a large number of bins so that the spikes in 
-    # the Fourier series are sufficiently narrow 
+    # the Fourier series are "sufficiently" narrow 
     if not no_bins%4 == 0:
         raise ValueError("no_bins must be a multiple of 4") 
-    U_i2 = np.zeros(no_bins)
-    U_i2[0],U_i2[no_bins//4] = U_i[0], U_i[1]
-    P_i2 = np.zeros(no_bins)
-    P_i2[0],P_i2[no_bins//4] = P_i[0], P_i[1]
-    return U_i2, P_i2
+    U_WB_i2 = np.zeros(no_bins)
+    U_WB_i2[0],U_WB_i2[no_bins//4] = U_WB_i[0], U_WB_i[1]
+    P_WB_i2 = np.zeros(no_bins)
+    P_WB_i2[0],P_WB_i2[no_bins//4] = P_WB_i[0], P_WB_i[1]
+    theta_WB_i2 = np.linspace(0,2*np.pi,no_bins,endpoint=False)
+    return U_WB_i2, P_WB_i2, theta_WB_i2
 
-no_bins = 4*72
-U_i2, P_i2 = new_wr1(no_bins)
+no_bins = 4*360
+U_WB_i2, P_WB_i2,theta_WB_i2 = new_wr1(no_bins)
+U_i2,P_i2,theta_i2 = trans_bearing_to_polar(U_WB_i2,P_WB_i2,theta_WB_i2)
+
 from utilities.helpers import simple_Fourier_coeffs
 _,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i2)*(P_i2*(U_i2**3)*len(P_i2))/((2*np.pi)))
 
@@ -105,7 +118,7 @@ pow_j2,_ = ntag_PA(cjd3_PA_terms,
 
 print("=== Test 2A ===")
 print("These should agree exactly")
-print(f"simple aep: {P_i[0]*P_n+P_i[1]*P_e:.6f}")
+print(f"simple aep: {simple_aep:.6f}")
 print(f"num_F  aep: {np.sum(pow_j1):.6f}")
 print(f"ntag   aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")
 
@@ -116,12 +129,13 @@ result = []
 for i in range(12):
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
-        U_i,P_i = get_floris_wind_rose(i+1,wd=np.arange(0, 360, 1))
-        theta_WB_i = np.linspace(0,2*np.pi,len(U_i))
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+
+        U_i,P_i,theta_i,_ = get_floris_wind_rose(i+1,wd=np.arange(0, 360, 1))
+
         _,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi)))
         wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
-
-        pow_j1,_,_ = num_Fs(U_i,P_i,theta_WB_i,
+        pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
                         layout,layout,
                         turb,
                         K,
@@ -138,4 +152,5 @@ for i in range(12):
         result.append(pce(np.sum(pow_j1),np.sum(pow_j2)))
 
 print("=== Test 2B ===")
-print(f"{np.mean(result):+.3f}% mean pce error across 12 sites (with {len(U_i)} bins) ")
+print("Comparing num_F with ntag. The difference (pce) should be negligible:")
+print(f"{np.mean(result):+.3f}% mean pce error across 12 sites (with {len(U_WB_i)} bins) ")

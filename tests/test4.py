@@ -23,14 +23,17 @@ alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
 
 U_inf1 = 15
 U_inf2 = 13
-U_i = np.array((U_inf1,U_inf2,))
-P_i = np.array((0.7,0.3,))
-theta_i = np.array((0,np.pi/2,))
-from utilities.helpers import get_WAV_pp
+U_WB_i = np.array((U_inf1,U_inf2,))
+P_WB_i = np.array((0.7,0.3,))
+theta_WB_i = np.array((0,np.pi/2,))
+
+from utilities.helpers import trans_bearing_to_polar,get_WAV_pp
+U_i,P_i,theta_i = trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i)
 wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
 wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+
 #cnst thrust coeff (Ct_op=3),global power coeff (Cp_op=2), exclude cross terms (cross_ts=False), approx wake deficit (ex=False)
 from utilities.AEP3_functions import num_Fs,vect_num_F
 pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,

@@ -162,7 +162,7 @@ def num_Fs(U_i,P_i,theta_i,
         #from wind orientated frame, rotation is opposite
         layout_r = rotate_layout(layout,-theta_i)
 
-        sort_index = np.argsort(layout_r[:, 1]) #sort index, with furthest upwind (x_n < x_{n+1}) first
+        sort_index = np.argsort(layout_r[:,0]) #sort index, with furthest upwind (x_n < x_{n+1}) first
         return sort_index
     
     def soat(a): #Sum over Axis Two (superposistion axis sum)
@@ -180,17 +180,17 @@ def num_Fs(U_i,P_i,theta_i,
     #the actual calculation loop
     for i in range(len(U_i)): #for each wind direction
         
-        sort_index = get_sort_index(layout,-theta_i[i]) #find
-        layout = layout[sort_index] #and reorder based on furthest upwind
+        sort_index = get_sort_index(layout,theta_i[i]) #find
+        layout_s = layout[sort_index] #and reorder based on furthest upwind
         
         for m in range(len(x_n)): #for each turbine in superposistion
-            x_m, x_m = layout[m,0],layout[m,1]       
+            x_m, y_m = layout_s[m,0],layout_s[m,1]       
             #calculate relative turbine locations
-            Rt = np.sqrt((x_n-x_m)**2+(y_n-x_m)**2)
-            THETAt = np.arctan2(y_n-x_m,x_n-x_m) - theta_i[i] 
+            Rt = np.sqrt((x_n-x_m)**2+(y_n-y_m)**2)
+            THETAt = np.arctan2(y_n-y_m,x_n-x_m) - theta_i[i] 
             #calculate relative plot_points (flow field ff) locations
-            Rff = np.sqrt((X-x_m)**2+(Y-x_m)**2)
-            THETAff = np.arctan2(Y-x_m,X-x_m) - theta_i[i]
+            Rff = np.sqrt((X-x_m)**2+(Y-y_m)**2)
+            THETAff = np.arctan2(Y-y_m,X-x_m) - theta_i[i]
             
             #then there are a few ways of defining the thrust coefficient
             if Ct_op == 1: #base on local velocity
@@ -345,7 +345,6 @@ def ntag_PA(Fourier_coeffs3_PA,
         alpha (nt,2) | (plot_points,2) : "energy content" (Cp(U)*P*U**3) of the wind at turbine locations or plot_points
     """
     r_jk,theta_jk = find_relative_coords(layout1,layout2)  #find relative posistions
-    theta_jk = theta_jk + np.pi #wake lies opposite
     theta_jk = np.mod(theta_jk + np.pi, 2 * np.pi) - np.pi #fix domain
 
     A_n,Phi_n = Fourier_coeffs3_PA

@@ -20,8 +20,6 @@ def deltaU_by_Uinf_f(r,theta,Ct,K,u_lim,ex):
     else:
         lim = (np.sqrt(Ct/8)-ep)/K #invalid region
         lim = np.where(lim<0.01,0.01,lim) #may sure it's always atleast 0.01 (stop self-produced wake) 
-    
-    theta = theta + np.pi #the wake lies opposite!
     if ex: #use full 
         U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
         deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
@@ -120,16 +118,16 @@ def get_WAV_pr(U_i,P_i,f):
     WAV = np.sum(f(U_i)*P_i)
     return WAV
 
-def trans_bearing_to_polar(U_i,P_i,theta_WB_i):
+def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i):
     #converts wind bearing theta_WB_i to polar angle theta_i
-    #fixes domain, and then re-sorts U_i and P_i to match
+    #fixes domain, and then re-sorts U_WB_i and P_WB_i to match
     theta_i = 3*np.pi/2 - theta_WB_i #convert to polar
     theta_i = np.mod(theta_i-np.pi,2*np.pi)-np.pi #fix domain
 
-    srt_idx = np.argsort(theta_i) #re-sort using transformed
+    srt_idx = np.argsort(theta_i) #re-sort using transformed theta
     theta_i = theta_i[srt_idx]
-    U_i = U_i[srt_idx]
-    P_i = P_i[srt_idx]
+    U_i = U_WB_i[srt_idx]
+    P_i = P_WB_i[srt_idx]
 
     return U_i,P_i,theta_i
 
@@ -151,7 +149,7 @@ def get_floris_wind_rose(site_n,**kwargs):
     #convert wind bearings to polar angle (and re-sort, U_i)
     U_i,P_i,theta_i = trans_bearing_to_polar(U_i,P_i,theta_WB_i)
     
-    return U_i,P_i,theta_i,fl_wr
+    return np.array(U_i),np.array(P_i),np.array(theta_i),fl_wr
 
 #signed percentage error
 def pce(exact,approx):

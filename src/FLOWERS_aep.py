@@ -17,7 +17,7 @@ from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
 from utilities.helpers import get_floris_wind_rose
-U_i,P_i,a = get_floris_wind_rose(6)
+U_i,P_i,_,_ = get_floris_wind_rose(6)
 thetaD_i = np.linspace(0,360,72,endpoint=False)
 layout = np.array([[0,0]])
 
@@ -36,10 +36,14 @@ from utilities.plotting_funcs import si_fm
 print(f'JFLOWERS: {aep1:.2f} in {si_fm(time_1)}')
 
 #%% 
+U_inf1 = 15
+U_inf2 = 13
+U_WB_i = np.array((U_inf1,U_inf2,))
+P_WB_i = np.array((0.7,0.3,))
+theta_WB_i = np.array((0,90,))
 from utilities.flowers_interface import FlowersInterface
 K = 0.05
-Nterms = 36
-flower_int = FlowersInterface(U_i,P_i,thetaD_i, layout, turb,num_terms=Nterms+1, k=K) 
+flower_int = FlowersInterface(U_WB_i,P_WB_i,theta_WB_i, layout, turb,num_terms=2, k=K) 
 print(np.sum(flower_int.calculate_aep())/10**6)
 
 #%% my own function to do the flowers calculations
@@ -74,29 +78,6 @@ fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
 ax.scatter(theta_i,U_i*P_i)
 ax.set_theta_zero_location('E')
 
-#%%
-a = np.linspace(0,10,100)
-b = np.linspace(0,10,100)
-
-
-#%%
-
-def trans_bearing_to_polar(theta_WB_i,U_i,P_i):
-    
-    theta_i2 = np.pi/2 - theta_WB_i #convert to polar
-    theta_i2 = np.mod(theta_i2-np.pi,2*np.pi)-np.pi #fix domain
-
-    srt_idx = np.argsort(theta_i2) #re-sort using transformed
-    theta_i2 = theta_i2[srt_idx]
-    U_i = U_i[srt_idx]
-    P_i = P_i[srt_idx]
-
-    return theta_i2,U_i,P_i
-
-a,b,c = trans_bearing_to_polar(theta_i,U_i,P_i)
-fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-ax.plot(a,b*c)
-ax.set_theta_zero_location('E')
 
 #%%
 from utilities.helpers import get_floris_wind_rose
@@ -130,25 +111,41 @@ print(f'GFLOWERS: {aep2:.2f} in {si_fm(time_2)}')
 
 layout = np.array([[0,0],[3,0],[10,0]])
 
+
+
 def get_sort_index(layout,theta_i):
-    #sorts turbines from furthest upwind in wind orientated frame           
+    #sorts turbines from furthest upwind in wind orientated frame   
+
     def rotate_layout(layout,rot):
         #rotates layout anticlockwise by angle rot 
         Xt,Yt = layout[:,0],layout[:,1]
         rot_Xt = Xt * np.cos(rot) - Yt * np.sin(rot)
         rot_Yt = Xt * np.sin(rot) + Yt * np.cos(rot) 
         layout_r = np.column_stack((rot_Xt.reshape(-1),rot_Yt.reshape(-1)))
-        return layout_r
+        return layout_r       
+    
     #from wind orientated frame, rotation is opposite
     layout_r = rotate_layout(layout,-theta_i)
 
-    sort_index = np.argsort(layout_r[:, 1]) #sort index, with furthest upwind (<x) first
-    return sort_index
+    sort_index = np.argsort(layout_r[:, 0]) #sort index, with furthest upwind (<x) first
+    return layout_r,sort_index
 
-theta_i = 89
-thetaR_i = np.deg2rad(theta_i)
+theta_i = 180
+thetaR_i = np.deg2rad(-theta_i)
+
+layout_r,sort_index = get_sort_index(layout,thetaR_i)
+
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.set(xlim=(-15,15),ylim=(-15,15))
+ax.scatter(layout_r[:,0],layout_r[:,1])
+for i in range(3):
+    ax.annotate(str(sort_index[i]),(layout_r[i,0],layout_r[i,1]))
+
+#%%
+#%%
 indx = get_sort_index(layout,thetaR_i)
-layout_n = layout[indx]
+layout_n = layout[indx] #re-sort from upwind first
 
 print(indx)
 
@@ -156,8 +153,9 @@ import matplotlib.pyplot as plt
 fig,ax = plt.subplots(figsize=(5,5),dpi=200)
 ax.set(xlim=(-15,15),ylim=(-15,15))
 ax.scatter(layout_n[:,0],layout_n[:,1])
+ax.plot([0,-np.cos(thetaR_i)],[0,-np.sin(thetaR_i)])
 for i in range(layout.shape[0]):
-    ax.annotate(str(indx[i]),(layout_n[i,0],layout_n[i,1]))
+    ax.annotate(str(i),(layout_n[i,0],layout_n[i,1]))
 
 #%%
 names = ['t1:','t2:','t3:']
