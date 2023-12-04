@@ -80,7 +80,78 @@ def floris_AV_timed_aep(U_i, P_i, thetaD_i, layout, turb, wake=True, timed=True)
     pow_j = np.sum(P_i[:, None, None]*aep_array, axis=0)  # weight average using probability
     return pow_j/(1*10**6), time
 
-def flowers_timed_aep(U_i,P_i,thetaD_i,layout, turb, K=0.05,Nterms =36,timed=True):
+def jflowers(Fourier_coeffs1,
+             layout1,layout2,
+             turb,
+             K,
+             c_0,
+             RHO=1.225):
+    
+    """ 
+    aep of wind farm using outlined in WES LoCascio 2022
+    adapted from the code developed by Michae LoCascio,
+    available at https://github.com/locascio-m/flowers/blob/main/flowers_interface.p
+
+    Args:
+        Fourier_coeffs1: tuple of Fourier coefficients (a_0, a_n, b_n) found on the series (1 - np.sqrt(1 - turb.Ct_f(U_i))) * U_i*P_i*len(P_i1)/(2*np.pi). U_i, P_i are the average bin speed and bin frequency respectively. The information would be reconstructed with a_0/2 + (a_n*np.cos(n*theta_b)+b_n*np.sin(n*theta_b). 
+        layout (nt,2): coordinates ((x1,y1),(x2,y2) ... (xt_nt,yt_nt)) etc. of turbines. Normalised by rotor DIAMETER!
+        turb (turbine obj) : turbine object, has turb.A (turbine swept area) attribute and turb.Cp_f() (turbine power coefficient) method.
+        K (1,) : JENSEN wake growth parameter (different from the Gaussian )
+        wake (boolean): set False to run fi.calculate_no_wake()
+        timed (boolean) : set False to run without timings (timing takes 4-8sec)
+
+    Returns:
+        pow_j (nt,) : aep of induvidual turbines
+        time : lowest execution time measured by adaptive timeit 
+    """   
+
+    #"my" implementation of the Jesen FLOWERS method
+    # as outlined in WES LoCascio 2022
+    
+    R,THETA = find_relative_coords(layout1,layout2)
+
+    a_0, a_n, b_n = Fourier_coeffs1 #unpack
+    
+    # Set up mask for rotor swept area
+    mask_area = np.where(R<=0.5,1,0) #true within radius
+
+    # Critical polar angle of wake edge (as a function of distance from turbine)
+    theta_c = np.arctan(
+        (1 / (2*R) + K * np.sqrt(1 + K**2 - (2*R)**(-2)))
+        / (-K / (2*R) + np.sqrt(1 + K**2 - (2*R)**(-2)))
+        ) 
+    theta_c = np.nan_to_num(theta_c)
+    
+    # Contribution from zero-frequency Fourier mode
+    du = a_0 * theta_c / (2 * K * R + 1)**2 * (
+        1 + (2*(theta_c)**2 * K * R) / (3 * (2 * K * R + 1)))
+    
+    # Reshape variables for vectorized calculations
+    m = np.arange(1, len(a_n)+1) #half open interval
+    a = a_n[None, None,:] 
+    b = b_n[None, None,:] 
+    R = R[:, :, None]
+    THETA = THETA[:, :, None] 
+    theta_c = theta_c[:, :, None] 
+
+    # Vectorized contribution of higher Fourier modes
+    du += np.sum(
+        (2*(a * np.cos(m*THETA) + b * np.sin(m*THETA)) / (m * (2 * K * R + 1))**3 *
+        (
+        np.sin(m*theta_c)*(m**2*(2*K*R*(theta_c**2+1)+1)-4*K*R)+ 4*K*R*theta_c*m *np.cos(theta_c * m))
+        ), axis=2)
+    # Apply mask for points within rotor radius
+    du = np.where(mask_area,a_0,du)
+    np.fill_diagonal(du, 0.) #stop self-produced wakes (?)
+    # Sum power for each turbine
+    du = np.sum(du, axis=1) #superposistion sum
+    wav = (c_0*np.pi - du)
+    alpha = turb.Cp_f(wav)*wav**3 
+    aep = (0.5*turb.A*RHO*alpha)/(1*10**6)
+
+    return aep
+
+def LC_flowers_timed_aep(U_i,P_i,thetaD_i,layout, turb, K=0.05,Nterms =36,timed=True):
     #theta_i in DEGREES!     
     flower_int = FlowersInterface(U_i,P_i,thetaD_i, layout, turb,num_terms=Nterms+1, k=K) 
     aep_func = lambda: flower_int.calculate_aep()
@@ -360,7 +431,7 @@ def ntag_PA(Fourier_coeffs3_PA,
     if np.any((r_jk<lim) & (r_jk != 0)):
         raise ValueError("turbines within the invalid region, this will likely cause erroneously low AEP")
     #if turbine 1 is posistioned adjacent to turbine 2, neither upwind or downwind (""inline with each other, perpendicular to the wind direction"")", if within the r limit, turbine 1 will be waked by turbine 2 - which is not realistic (or atleast not as described by Bastankah 2014)
-    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) #careful, even though it uses a small angle approximation, the domain is still restricted exactly (?)
+    sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) 
     
     #modify some dimensions ready for broadcasting
     n_b = n[None,None,:]  
@@ -370,16 +441,15 @@ def ntag_PA(Fourier_coeffs3_PA,
     theta_b = theta_jk[:,:,None]
     #more auxilaries
     fs = A_n*np.cos(n_b*theta_b+Phi_n) #fourier series (including DC!)
-    nsigma = sigma_b*n_b
 
     def term(a):
         cnst_term = ((np.sqrt(2*np.pi*a)*sigma)/(a))*(sqrt_term**a)
-        mfs = (np.sum(np.exp(-((nsigma)**2)/(2*a))*(fs),axis=-1)) #modified Fourier series
+        mfs = (np.sum(np.exp(-((sigma_b*n_b)**2)/(2*a))*(fs),axis=-1)) #modified Fourier series
         return np.sum(cnst_term*mfs,axis=-1)
 
     #alpha is the 'energy' content of the wind
     alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) #- term(3)
-    #print("alpha: {}".format(alpha))
+    
     #(I fully vectorised this and it ran slower ... so I'm sticking with this)
     #If it were vectorised using dimensions sparingly (e.g. don't broadcast everything to 4D (alpha,J,K,N) ) immediately) it might be faster
     if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation

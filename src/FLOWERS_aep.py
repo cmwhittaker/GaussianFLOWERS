@@ -21,11 +21,11 @@ U_i,P_i,_,_ = get_floris_wind_rose(6)
 thetaD_i = np.linspace(0,360,72,endpoint=False)
 layout = np.array([[0,0]])
 
-from utilities.AEP3_functions import flowers_timed_aep
+from utilities.AEP3_functions import LC_flowers_timed_aep
 from utilities.helpers import adaptive_timeit
 from pathlib import Path
 
-pow_z,time_1 = flowers_timed_aep(U_i,P_i,thetaD_i,layout,turb,0.05,timed=True)
+pow_z,time_1 = LC_flowers_timed_aep(U_i,P_i,thetaD_i,layout,turb,0.05,timed=True)
 aep1 = np.sum(pow_z) 
 
 from utilities.helpers import simple_Fourier_coeffs,get_WAV_pp

@@ -87,7 +87,7 @@ U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
 errors = np.zeros((ROWS,COLS,4))
 
-from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,flowers_timed_aep,floris_FULL_timed_aep
+from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,LC_flowers_timed_aep,floris_FULL_timed_aep
 
 for i in range(ROWS): #for each wind rose (site)
     U_i[:,i],P_i[:,i],fl_wr = get_floris_wind_rose(site_n[i])
@@ -156,7 +156,7 @@ for i in range(ROWS): #for each wind rose (site)
         powj_f[i][j],_ = floris_AV_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False,timed=False)   
 
         #flowers AEP
-        powj_g[i][j],time_g[i][j] = flowers_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,0.05,timed=timed)
+        powj_g[i][j],time_g[i][j] = LC_flowers_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,0.05,timed=timed)
         
         #floris AEP WITHOUT wind speed averaging
         powj_h[i][j],time_h[i][j] = floris_FULL_timed_aep(fl_wr,theta_i,layout[i][j],turb,timed=False)

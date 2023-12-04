@@ -57,7 +57,7 @@ Uwff_b = np.zeros((ROWS,COLS,plot_points.shape[0]))
 
 U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
-from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,flowers_timed_aep
+from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,LC_flowers_timed_aep
 
 for i in range(ROWS): #for each wind rose (site)
     U_i[:,i],P_i[:,i] = get_floris_wind_rose(site_n[i])
@@ -112,7 +112,7 @@ for i in range(ROWS): #for each wind rose (site)
             (powj_d[i][j][k],_),time_d[i][j][k] = adaptive_timeit(aep_func_d,timed=timed)
 
             #flowers AEP
-            powj_e[i][j][k],time_e[i][j][k] = flowers_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,0.05,Nterms=Nterms[k],timed=timed)
+            powj_e[i][j][k],time_e[i][j][k] = LC_flowers_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,0.05,Nterms=Nterms[k],timed=timed)
         
             print(f"{(k+1)+j*LAYS+i*LAYS*COLS}/{ROWS*COLS*LAYS}")
 

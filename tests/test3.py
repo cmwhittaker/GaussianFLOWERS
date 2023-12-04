@@ -58,5 +58,6 @@ pow_j2,_ = ntag_PA(cjd3_PA_terms,
             u_lim=1.9)
 
 print("=== Test 3A ===")
+print("These should agree to ~6sf")
 print(f"num_F aep: {np.sum(pow_j1):.6f}")
 print(f"ntag  aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")

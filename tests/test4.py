@@ -53,6 +53,7 @@ pow_j2,_ = vect_num_F(U_i,P_i,theta_i,
                       ex=True)
 
 print("=== Test 4A ===")
+print("These should agree to ~6sf")
 print(f"num_F      aep: {np.sum(pow_j1):.6f}")
 print(f"vect_num_F aep: {np.sum(pow_j2):.6f}")
 
@@ -60,8 +61,7 @@ print(f"vect_num_F aep: {np.sum(pow_j2):.6f}")
 #%% the two functions should also agree for a more complex wind rose (layout is unchanged)
 from utilities.helpers import get_floris_wind_rose,pce,simple_Fourier_coeffs
 site_no = 2 #vary between 1-12 (inclusive)
-U_i,P_i = get_floris_wind_rose(site_no,wd=np.arange(0, 360, 1))
-theta_i = np.linspace(0,2*np.pi,len(U_i))
+U_i,P_i,theta_i,_ = get_floris_wind_rose(site_no,wd=np.arange(0, 360, 1))
 _,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/((2*np.pi)))
 wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
 
@@ -82,7 +82,7 @@ pow_j2,_ = vect_num_F(U_i,P_i,theta_i,
                       ex=True)
 
 print("=== Test 4B ===")
-print("These should agree exactly")
+print("These should approximately agree")
 print(f"num_F aep: {np.sum(pow_j1):.6f}")
 print(f"ntag  aep: {np.sum(pow_j2):.6f} (with {len(U_i)} bins) ({pce(np.sum(pow_j1),np.sum(pow_j2)):+.3f})%")
 

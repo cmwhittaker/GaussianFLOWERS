@@ -117,7 +117,7 @@ pow_j2,_ = ntag_PA(cjd3_PA_terms,
             u_lim=1.9)
 
 print("=== Test 2A ===")
-print("These should agree exactly")
+print("These should agree to ~6sf")
 print(f"simple aep: {simple_aep:.6f}")
 print(f"num_F  aep: {np.sum(pow_j1):.6f}")
 print(f"ntag   aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")
@@ -126,6 +126,7 @@ print(f"ntag   aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")
 from utilities.helpers import get_floris_wind_rose,pce
 import warnings
 result = []
+print("Testing with all 12 wind roses, this will take a minute")
 for i in range(12):
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
