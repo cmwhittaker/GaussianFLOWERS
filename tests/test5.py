@@ -171,7 +171,7 @@ def flowers_2(Fourier_coeffs1,
     # Sum power for each turbine
     du = np.sum(du, axis=1) #superposistion sum
     wav = (c_0*np.pi - du)
-    alpha = turb.Cp_f(wav)*wav**3 #turbine sum #np.sum((u0 - du)**3) 
+    alpha = turb.Cp_f(wav)*wav**3 
     aep = (0.5*turb.A*RHO*alpha)/(1*10**6)
 
     return aep
@@ -221,6 +221,12 @@ print("simple_aep: {}".format(simple_aep))
 print("flower_aep: {}".format(flower_aep))
 print("my_aep    : {}".format(np.sum(aep2)))
 print("num_aep   : {}".format(np.sum(num_aep2)))
+
+#%%
+
+%timeit flowers_2(Fourier_coeffs1_Ct,layout,layout,turb,K,c_0)
+%timeit np.sum(flower_int.calculate_aep())
+%timeit num_aep2 = JF_num(U_i3,P_i3,theta_i3,layout,turb,K)
 
 #%% they should also agree for a more complex wind rose ...
 from utilities.helpers import get_floris_wind_rose_WB

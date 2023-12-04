@@ -171,19 +171,16 @@ class FlowersInterface():
         self.c_0 = 2*np.sum(self.U_i * self.P_i)/(2*np.pi)
         # Fourier expansion of wake deficit term
         c1 = ((1 - np.sqrt(1 - ct)) * self.U_i* self.P_i)/(2*np.pi)
-        print("len(c1): {}".format(len(c1)))
+
         c1ft = 2 * np.fft.rfft(c1)
         a =  c1ft.real
         b = -c1ft.imag
-        print("len(a): {}".format(len(a)))
-        print("num_terms: {}".format(num_terms))
 
         self.a_0 = a[0]
 
         # Truncate Fourier series to specified number of modes
         if num_terms > 0 and num_terms <= len(a):
             a = a[0:num_terms+1] #dc is the 0 term
-            print("len(a): {}".format(len(a)))
             b = b[0:num_terms+1]
         else:
             if num_terms > 0 :
