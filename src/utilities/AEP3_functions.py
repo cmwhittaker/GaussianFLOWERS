@@ -96,7 +96,7 @@ def jflowers(Fourier_coeffs1,
         Fourier_coeffs1: tuple of Fourier coefficients (a_0, a_n, b_n) found on the series (1 - np.sqrt(1 - turb.Ct_f(U_i))) * U_i*P_i*len(P_i1)/(2*np.pi). U_i, P_i are the average bin speed and bin frequency respectively. The information would be reconstructed with a_0/2 + (a_n*np.cos(n*theta_b)+b_n*np.sin(n*theta_b). 
         layout (nt,2): coordinates ((x1,y1),(x2,y2) ... (xt_nt,yt_nt)) etc. of turbines. Normalised by rotor DIAMETER!
         turb (turbine obj) : turbine object, has turb.A (turbine swept area) attribute and turb.Cp_f() (turbine power coefficient) method.
-        K (1,) : JENSEN wake growth parameter (different from the Gaussian )
+        K (1,) : JENSEN wake growth parameter (different from the Gaussian parameter!)
         wake (boolean): set False to run fi.calculate_no_wake()
         timed (boolean) : set False to run without timings (timing takes 4-8sec)
 
