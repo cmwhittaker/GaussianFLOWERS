@@ -35,7 +35,7 @@ COLS = 3 #number of layout variations
 def empty2dPyarray(rows,cols): #create empty 2d python array
     return [[0 for j in range(cols)] for i in range(rows)]
 
-def find_errors(U_i,P_i,theta_i,layout,plot_points,turb,K):
+def find_errors(U_i,P_i,theta_i,plot_points,layout,turb,K):
     # this finds the errors resulting from each of the assumptions, they are:
     # 1. Ct_error: Approximating Ct(U_w) (local) with a constant \overline{C_t}
     # 2. Cp_error1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
@@ -48,8 +48,7 @@ def find_errors(U_i,P_i,theta_i,layout,plot_points,turb,K):
     
     def simple_aep(Ct_op=1,Cp_op=1,cross_ts=True,ex=True,cube_term=True):
         pow_j,_,_= num_Fs(U_i,P_i,theta_i,
-                     layout,
-                     plot_points,
+                     plot_points,layout,
                      turb,
                      K=K,
                      u_lim=None,
@@ -65,12 +64,17 @@ def find_errors(U_i,P_i,theta_i,layout,plot_points,turb,K):
     
     return (Ct_error,Cp_error1,Cx1_error,SA_error)
 
-theta_i = np.linspace(0,360,NO_BINS,endpoint=False) 
+import warnings
+# Suppress spammy runtime warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+thetaD_i = np.linspace(0,360,NO_BINS,endpoint=False) #theta in degrees
+thetaD_WB_i = 270 - thetaD_i #wind bearing bin centers 
 
 from utilities.turbines import iea_10MW
 turb = iea_10MW()
 
-site_n = [2,3,6] #[6,8,10] are also tricky 
+site_n = [2,3,6] #[6,8,10] are also "tricky"
 layout_n = [5,6,7] # update EXTENT to increase size of window if increasing this
 rot = [0,0,0]
 #generate the contourf data
@@ -87,39 +91,47 @@ U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 
 errors = np.zeros((ROWS,COLS,4))
 
-from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,LC_flowers_timed_aep,floris_FULL_timed_aep
+from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,LC_flowers_timed_aep,floris_FULL_timed_aep,jflowers
 
 for i in range(ROWS): #for each wind rose (site)
-    U_i[:,i],P_i[:,i],fl_wr = get_floris_wind_rose(site_n[i])
+    #get wind rose (NOT sorted using wind bearing)
+    U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_n[i])
+    
     #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
     _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
     #For caag, the fourier coeffs are found from Pi*Ui
     _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs((P_i[:,i]*U_i[:,i]*len(P_i[:,i]))/(2*np.pi))
-    
-    wav_Ct = get_WAV_pp(U_i[:,i],P_i[:,i],turb,turb.Ct_f) #weight ct by power production
+    #weight ct by power production
+    wav_Ct = get_WAV_pp(U_i[:,i],P_i[:,i],turb,turb.Ct_f) 
+
+    #for Jensen FLOWERS, the Fourier coeffs are found from
+    # 1-sqrt(ct) etc.
+    c_0 = np.sum(U_i[:,i]*P_i[:,i])/np.pi
+    Fourier_coeffs_j,_ = simple_Fourier_coeffs((1 - np.sqrt(1 - turb.Ct_f(U_i[:,i]))) * U_i[:,i]*P_i[:,i]*len(P_i[:,i])/(2*np.pi)) 
 
     for j in range(COLS): #for each layout
         
         layout[i][j] = rectangular_layout(layout_n[j],SPACING,rot[j])
         
         #find the errors due to each assumption (numerically)
-        errors[i,j,:] = find_errors(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),layout[i][j],plot_points,turb,K)
+        errors[i,j,:] = find_errors(U_i[:,i],P_i[:,i],np.deg2rad(thetaD_i),plot_points,layout[i][j],turb,K)
 
         #floris aep (the reference)
-        powj_a[i][j],time_a[i][j] = floris_AV_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,timed=timed)
+        powj_a[i][j],time_a[i][j] = floris_AV_timed_aep(U_i[:,i],P_i[:,i],thetaD_WB_i,layout[i][j],turb,timed=timed)
 
         #non-vectorised numerical aep (flow field+aep)
-        aep_func_b = lambda: num_Fs(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),
-                                      layout[i][j],plot_points,
-                                      turb,K,
-                                      u_lim=None,
-                                      Ct_op=1, #local Ct
-                                      Cp_op=1, #local Cp
-                                      cross_ts=True,ex=False)
-        powj_b[i][j],_,Uwff_b[i,j,:] = aep_func_b() #no timing, performance is not comparable because it's non-vectorised
+        aep_func_b = lambda: num_Fs(U_i[:,i],P_i[:,i],np.deg2rad(thetaD_i),
+                                    plot_points,layout[i][j],
+                                    turb,K,
+                                    u_lim=None,
+                                    Ct_op=1, #local Ct
+                                    Cp_op=1, #local Cp
+                                    cross_ts=True,ex=False)
+        powj_b[i][j],_,Uwff_b[i,j,:] = aep_func_b() #no timing - performance is not comparable because it's non-vectorised
 
         #vectorised numerical aep (aep+time)
-        aep_func_c = lambda: vect_num_F(U_i[:,i],P_i[:,i],np.deg2rad(theta_i),
+        aep_func_c = lambda: vect_num_F(U_i[:,i],P_i[:,i],
+                                       np.deg2rad(thetaD_i),
                                        layout[i][j],layout[i][j],
                                        turb,
                                        K,
@@ -152,14 +164,21 @@ for i in range(ROWS): #for each wind rose (site)
         # *local based on the weight averaged wake velocity 
         (powj_e[i][j],_),time_e[i][j] = adaptive_timeit(aep_func_e,timed=timed)
 
-        # #floris NO WAKE aep
-        powj_f[i][j],_ = floris_AV_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,wake=False,timed=False)   
+        # #floris NO WAKE aep (sanity check)
+        powj_f[i][j],_ = floris_AV_timed_aep(U_i[:,i],P_i[:,i],thetaD_WB_i,layout[i][j],turb,wake=False,timed=False)   
 
         #flowers AEP
-        powj_g[i][j],time_g[i][j] = LC_flowers_timed_aep(U_i[:,i],P_i[:,i],theta_i,layout[i][j],turb,0.05,timed=timed)
+        aep_func_g = lambda: jflowers(Fourier_coeffs_j,
+                                      layout[i][j],layout[i][j],
+                                      turb,
+                                      K,
+                                      c_0,
+                                      RHO=1.225,
+                                      r_lim=0.5)
+        (powj_g[i][j],_),time_g[i][j] = adaptive_timeit(aep_func_g,timed=timed)
         
         #floris AEP WITHOUT wind speed averaging
-        powj_h[i][j],time_h[i][j] = floris_FULL_timed_aep(fl_wr,theta_i,layout[i][j],turb,timed=False)
+        powj_h[i][j],time_h[i][j] = floris_FULL_timed_aep(fl_wr,layout[i][j],turb,timed=False)
 
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
 
@@ -269,7 +288,7 @@ def ill_cb(gs,cont_lim):
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
 
     cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-                cax=cax, orientation='horizontal',label='$\\overline{U_w}$')
+                cax=cax, orientation='horizontal',label='Average Wind Velocity / $ms^{-1}$')
     
     return None
 
@@ -295,7 +314,7 @@ cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
 for i in range(ROWS): 
     #first column is the wind rose
     y1 = U_i[:,i]*P_i[:,i]
-    nice_polar_plot(fig,gs[2*i,0],np.deg2rad(theta_i),y1,"$P(\\theta)U(\\theta)$")
+    nice_polar_plot(fig,gs[2*i,0],np.deg2rad(thetaD_i),y1,"$P(\\theta)U(\\theta)$")
     for j in range(COLS): #then onto the contours
         Z2 = pce(powj_a[i][j], powj_d[i][j])
         xt,yt = layout[i][j][:,0],layout[i][j][:,1]
@@ -321,6 +340,7 @@ if SAVE_FIG:
 plt.show()
 
 #%% Another ... version of the figure
+#you need to run the cell above first
 
 def nice_composite_plot_v03B(fig,cf_gs,cb_gs,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None),cb_label=False):
     ax = fig.add_subplot(cf_gs)
@@ -337,7 +357,7 @@ def nice_composite_plot_v03B(fig,cf_gs,cb_gs,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(No
     vmin,vmax = cont_lim
     cf = ax.contourf(X,Y,Z1,50,cmap=cmap1,vmin=vmin,vmax=vmax)
     #scatter plot
-    color_list = plt.cm.coolwarm(np.linspace(0, 1, 8))
+    color_list = plt.cm.viridis(np.linspace(1, 0, 8))
     from matplotlib.colors import ListedColormap
     cmap = ListedColormap(color_list)
     sp = ax.scatter(xt,yt,c=Z2,cmap=cmap,marker='x',s=10)
@@ -366,7 +386,7 @@ dc = 2 #data column
 for i in range(3): #for each COLUMN
     #first row is the wind roses
     y1 = U_i[:,i]*P_i[:,i]
-    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(theta_i),y1,"$P(\\theta)U(\\theta)$")
+    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$")
     #next is the contourf
     Z2 = pce(powj_a[i][dc], powj_d[i][dc])
     xt,yt = layout[i][dc][:,0],layout[i][dc][:,1]
@@ -400,7 +420,7 @@ aep_table_text = [['\\textbf{AEP}','','','']]
 for i in range(4): #for each row
     aep_row_txt.append(hdr_list[i]) #first is the name
     for j in range(3): #next 3 are AEP
-        aep_row_txt.append(f'{aep_arr[j,dc,i]:.2f}MW({pce(aep_arr[j,dc,0],aep_arr[j,dc,i]):+.1f}\%)')
+        aep_row_txt.append(f'{8.760*aep_arr[j,dc,i]:.2f}GWh({pce(aep_arr[j,dc,0],aep_arr[j,dc,i]):+.1f}\%)')
                     
     aep_table_text.append(aep_row_txt)
     aep_row_txt = [] #clear row    
@@ -452,4 +472,5 @@ if SAVE_FIG:
     plt.savefig(path_plus_name, dpi='figure', format='png', bbox_inches='tight')
 
     print(f"figure saved as {fig_name}")
+    print(f"to {path_plus_name}")
 

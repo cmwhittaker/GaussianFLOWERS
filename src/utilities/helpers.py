@@ -3,7 +3,7 @@ import numpy as np
 def deltaU_by_Uinf_f(r,theta,Ct,K,u_lim,ex):
     '''
     wake velocity deficit based on Bastankah 2014
-    Args:
+    Args: (normalised by DIAMETER)
         r (np.array): r in polar coordinates
         theta (np.array): theta in polar coordinates
         Ct (np.array | float): Thrust coefficient
@@ -19,7 +19,7 @@ def deltaU_by_Uinf_f(r,theta,Ct,K,u_lim,ex):
         lim = u_lim
     else:
         lim = (np.sqrt(Ct/8)-ep)/K #invalid region
-        lim = np.where(lim<0.01,0.01,lim) #may sure it's always atleast 0.01 (stop self-produced wake) 
+        lim = np.where(lim<0.1,0.1,lim) #may sure it's always atleast 0.01 (stop self-produced wake) 
     if ex: #use full 
         U_delta_by_U_inf = (1-np.sqrt(1-(Ct/(8*(K*r*np.cos(theta)+ep)**2))))*(np.exp(-(r*np.sin(theta))**2/(2*(K*r*np.cos(theta)+ep)**2)))
         deltaU_by_Uinf = np.where(r*np.cos(theta)>lim,U_delta_by_U_inf,0) #this stops turbines producing their own deficit  
@@ -68,18 +68,21 @@ def fixed_rectangular_domain(extent,r=200):
     xx,yy = np.meshgrid(np.linspace(-extent,extent,r),np.linspace(-extent,extent,r))
     return xx,yy,np.column_stack((xx.reshape(-1),yy.reshape(-1)))
 
-def find_relative_coords(layout,plot_points):
+def find_relative_coords(plot_points,layout):
     #find the r, theta coordinates relative to each turbine
-    xt_n,yt_n = layout[:,0],layout[:,1]
-    xt_m,yt_m = plot_points[:,0],plot_points[:,1]
-
-    x_nm = xt_n[None, :] - xt_m[:, None] 
-    y_nm = yt_n[None, :] - yt_m[:, None]
-
+    #when plot_points is a meshgrid (stacked as coords), then this can be used to visualise the wake nicely
+    xt_n,yt_n = plot_points[:,0],plot_points[:,1]
+    xt_m,yt_m = layout[:,0],layout[:,1]
+    #relative cartesian
+    x_nm = xt_n[:, None] - xt_m[None,:] #dimensions (n,m)
+    y_nm = yt_n[:, None] - yt_m[None,:] #as written in paper
+    #convert to polar
     r_nm = np.sqrt(x_nm**2+y_nm**2)
-    theta_nm = np.arctan2(y_nm,x_nm) #clockwise -ve from x axis
-
-    #should really remove diagonal elements
+    theta_nm = np.arctan2(y_nm,x_nm) # (clockwise -ve from x axis
+    # remove diagonal elements
+    # (I don't do this because it messes with visualisation ... )
+    # mask = ~np.eye(n, dtype=bool)
+    # out = x3[:,mask].reshape(m,n,n-1)
 
     return r_nm,theta_nm  
 
@@ -118,10 +121,10 @@ def get_WAV_pr(U_i,P_i,f):
     WAV = np.sum(f(U_i)*P_i)
     return WAV
 
-def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i,off=0):
+def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i):
     #converts wind bearing theta_WB_i to polar angle theta_i
     #fixes domain, and then re-sorts U_WB_i and P_WB_i to match
-    theta_i = 3*np.pi/2 - theta_WB_i#convert to polar
+    theta_i = (3*np.pi)/2 - theta_WB_i#convert to polar
     theta_i = np.mod(theta_i,2*np.pi) #fix from 0 to 2pi
 
     srt_idx = np.argsort(theta_i) #re-sort using transformed theta
@@ -129,7 +132,6 @@ def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i,off=0):
     U_i = U_WB_i[srt_idx]
     P_i = P_WB_i[srt_idx]
 
-     #fix domain
 
     return U_i,P_i,theta_i
 
@@ -144,7 +146,7 @@ def get_floris_wind_rose(site_n,**kwargs):
     fl_wr = WindRose()
     fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
-    wr.freq_val = wr.freq_val/np.sum(wr.freq_val)
+    wr.freq_val = wr.freq_val/np.sum(wr.freq_val) #frequency sum to 1
     U_WB_i = wr.ws #(average) wind speeds
     P_WB_i = wr.freq_val 
     theta_WB_i = np.deg2rad(wr.wd) #wind direction bearing (in radians)

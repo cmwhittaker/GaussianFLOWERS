@@ -1,10 +1,7 @@
-#%% 
-# 7 shaped layout with num_F + vect_num_F
-# (checking they match)
-# subject to
-# U_i = [15,13]
-# P_i = [0.7,0.3]
-# theta_i = [0,np.pi/2]
+#%% validating vect_num_F
+
+# check the wake "flow field" using contourf
+# (theta is theta' NOT a wind bearing )
 
 import sys
 import os
@@ -13,6 +10,53 @@ if hasattr(sys, 'ps1'):
     #if it's interactive, re-import modules every run
     %load_ext autoreload
     %autoreload 2
+
+import numpy as np
+from utilities.turbines import iea_10MW
+turb = iea_10MW()
+K=0.03 #wake expansion rate
+
+from utilities.helpers import rectangular_domain
+layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+xx,yy,plot_points,_,_ = rectangular_domain(layout,xr=200,yr=200)
+
+U_i,P_i,theta_i = np.array((25,)),np.array((1,)),np.array((np.deg2rad(20),)) 
+
+from utilities.AEP3_functions import num_Fs,vect_num_F
+#calc flow field
+_,ff = vect_num_F(U_i,P_i,theta_i,
+                  plot_points,layout, 
+                  turb,
+                  K,
+                  Ct_op=2,
+                  Cp_op=1,  
+                  ex=True)
+
+#visualise / plot
+import matplotlib.pyplot as plt
+from matplotlib import cm
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.set(aspect='equal')
+cf = ax.contourf(xx,yy,ff.reshape(xx.shape),20,cmap=cm.coolwarm)
+ax.scatter(layout[:,0],layout[:,1],marker='x',color='black')
+fig.colorbar(cf)
+
+#%%
+
+# 
+# using num_F to validate vect_num_F 
+#
+# U_i = [15,13]
+# P_i = [0.7,0.3]
+# theta_i = [0,np.pi/2] (wind bearings)
+# 7 shaped layout 
+# layout: np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+# looks like:
+# x        x
+#          
+#         x
+# 
+#        x
 
 import numpy as np
 from utilities.turbines import iea_10MW
@@ -34,8 +78,8 @@ wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 
-#cnst thrust coeff (Ct_op=3),global power coeff (Cp_op=2), exclude cross terms (cross_ts=False), approx wake deficit (ex=False)
-from utilities.AEP3_functions import num_Fs,vect_num_F
+#cnst thrust coeff (Ct_op=3),global power coeff (Cp_op=2), exclude cross terms (cross_ts=False), exact wake deficit (ex=True)
+
 pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
                     layout,layout,
                     turb,

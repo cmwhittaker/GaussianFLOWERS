@@ -1,5 +1,8 @@
-#%% 
-# 2 turbine, uniform wind rose with ntag + num_F
+#%% Test 3
+# 
+# using num_F to validate ntag for a uniform wind rose
+#
+
 import sys
 import os
 sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
@@ -31,8 +34,6 @@ wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
 
           # some simple calcs here
-
-
 
 
 #Next check num_Fs is giving the same result

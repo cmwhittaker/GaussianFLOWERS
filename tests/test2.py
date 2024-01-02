@@ -1,16 +1,7 @@
-#%% 
-# 7 shaped layout with ntag + num_F
-# subject to
-# layout: np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
-# looks like:
-# x        x
-#          
-#         x
-# 
-#        x
-# U_i = [15,13]
-# P_i = [0.7,0.3]
-# theta_i = [0,np.pi/2]
+#%% validating ntag_PA
+
+# check the wake "flow field" using contourf
+# (theta is theta' NOT a wind bearing )
 import sys
 import os
 sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
@@ -19,9 +10,75 @@ if hasattr(sys, 'ps1'):
     %load_ext autoreload
     %autoreload 2
 
+
 import numpy as np
 from utilities.turbines import iea_10MW
 turb = iea_10MW()
+K=0.03 #wake expansion rate
+
+def new_wr1(no_bins):
+    # the FLOWERS method needs a large number of bins so that the spikes in the Fourier series are "sufficiently" narrow 
+    if not no_bins%4 == 0:
+        raise ValueError("no_bins must be a multiple of 4") 
+    U_i1 = np.zeros(no_bins)
+    P_i1 = np.zeros(no_bins)
+
+    # U_i1[0] = 10 #WESTERLY wind direction
+    # P_i1[0] = 1 #one direction
+
+    U_i1[no_bins//16] = 25 #22.5 anticlock shift
+    P_i1[no_bins//16] = 1 #still one direction
+
+    # two-direction test
+    # U_i1[0],U_i1[(no_bins)//4] = 15,15
+    # P_i1[0],P_i1[(no_bins)//4] = 0.5, 0.5 
+
+    theta_i1 = np.linspace(0,2*np.pi,no_bins,endpoint=False)
+    return U_i1, P_i1, theta_i1
+
+U_i,P_i,theta_i = new_wr1(360)
+
+from utilities.AEP3_functions import num_Fs,ntag_PA
+from utilities.helpers import rectangular_domain,simple_Fourier_coeffs,get_WAV_pp,find_relative_coords
+
+layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+xx,yy,plot_points,_,_ = rectangular_domain(layout,xr=200,yr=200)
+
+_,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i)*(P_i*(U_i**3)*len(P_i))/(2*np.pi))
+wav_Ct = get_WAV_pp(U_i,P_i,turb,turb.Ct_f)
+
+_,ff = ntag_PA(Fourier_coeffs3_PA,
+                   plot_points,layout,
+                   turb,
+                   K,
+                   wav_Ct,
+                   u_lim=0.5,
+                   flo_vis=True)
+
+#visualise / plot
+import matplotlib.pyplot as plt
+from matplotlib import cm
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+ax.set(aspect='equal')
+
+cf = ax.contourf(xx,yy,ff.reshape(xx.shape),20,cmap=cm.coolwarm)
+ax.scatter(layout[:,0],layout[:,1],marker='x',color='black')
+fig.colorbar(cf)
+
+# 
+# using num_F to validate ntag ( also against "manual" calculations )
+#
+# U_i = [15,13]
+# P_i = [0.7,0.3]
+# theta_i = [0,np.pi/2] (wind bearings)
+# 7 shaped layout 
+# layout: np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
+# looks like:
+# x        x
+#          
+#         x
+# 
+#        x
 
 K=0.03 #wake expansion rate
 alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
@@ -36,7 +93,7 @@ wav_Ct = get_WAV_pp(U_WB_i,P_WB_i,turb,turb.Ct_f)
 wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
 #first, start with a simple implementation 
-def U_delta_SA(o,a):
+def U_delta_SA(o,a): 
     #"dumb" way to convert to polar
     #a:adjacent to angle, o:opposite to angle
     r = np.sqrt(a**2+o**2)
@@ -80,7 +137,7 @@ layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 #cnst thrust coeff (Ct_op=3),global power coeff (Cp_op=2), exclude cross terms (cross_ts=False), approx wake deficit (ex=False)
 from utilities.helpers import trans_bearing_to_polar
 U_i,P_i,theta_i = trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i)
-from utilities.AEP3_functions import num_Fs,ntag_PA
+
 pow_j1,_,_ = num_Fs(U_i,P_i,theta_i,
                    layout,layout,
                    turb,
@@ -106,7 +163,6 @@ no_bins = 4*360
 U_WB_i2, P_WB_i2,theta_WB_i2 = new_wr1(no_bins)
 U_i2,P_i2,theta_i2 = trans_bearing_to_polar(U_WB_i2,P_WB_i2,theta_WB_i2)
 
-from utilities.helpers import simple_Fourier_coeffs
 _,cjd3_PA_terms = simple_Fourier_coeffs(turb.Cp_f(U_i2)*(P_i2*(U_i2**3)*len(P_i2))/((2*np.pi)))
 
 pow_j2,_ = ntag_PA(cjd3_PA_terms,
@@ -123,10 +179,11 @@ print(f"num_F  aep: {np.sum(pow_j1):.6f}")
 print(f"ntag   aep: {np.sum(pow_j2):.6f} (with {no_bins} bins)")
 
 #%% the two functions should also agree for a more complex wind rose (layout is unchanged)
-from utilities.helpers import get_floris_wind_rose,pce
+from utilities.helpers import get_floris_wind_rose,pce,rectangular_layout
+layout = rectangular_layout(10,7,np.deg2rad(10))
 import warnings
 result = []
-print("Testing with all 12 wind roses, this will take a minute")
+print("Testing with all 12 wind roses, this should take less than 30s")
 for i in range(12):
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
@@ -154,4 +211,4 @@ for i in range(12):
 
 print("=== Test 2B ===")
 print("Comparing num_F with ntag. The difference (pce) should be negligible:")
-print(f"{np.mean(result):+.3f}% mean pce error across 12 sites (with {len(U_WB_i)} bins) ")
+print(f"{np.mean(result):+.3f}% mean pce error across 12 sites (with {len(U_i)} bins) ")
