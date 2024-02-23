@@ -64,7 +64,7 @@ ax.set(aspect='equal')
 cf = ax.contourf(xx,yy,ff.reshape(xx.shape),20,cmap=cm.coolwarm)
 ax.scatter(layout[:,0],layout[:,1],marker='x',color='black')
 fig.colorbar(cf)
-
+#%%
 # 
 # using num_F to validate ntag ( also against "manual" calculations )
 #

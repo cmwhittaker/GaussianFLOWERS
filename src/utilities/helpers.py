@@ -136,7 +136,7 @@ def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i):
     return U_i,P_i,theta_i
 
 from floris.tools import WindRose
-def get_floris_wind_rose(site_n,**kwargs):
+def get_floris_wind_rose(site_n,align_west=False,**kwargs):
     #use floris to parse wind rose toolkit site data
     #(each site has its own folder)
     from pathlib import Path
@@ -146,7 +146,11 @@ def get_floris_wind_rose(site_n,**kwargs):
     fl_wr = WindRose()
     fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
-    wr.freq_val = wr.freq_val/np.sum(wr.freq_val) #frequency sum to 1
+    wr.freq_val = wr.freq_val/np.sum(wr.freq_val) #frequency sumf to 1
+    if align_west: #align predominant direction West
+        offsets = [-70,210,-35,250,250,270,190,-35,215,245,265,145]
+        wr.wd = wr.wd - offsets[site_n-1] - 90
+
     U_WB_i = wr.ws #(average) wind speeds
     P_WB_i = wr.freq_val 
     theta_WB_i = np.deg2rad(wr.wd) #wind direction bearing (in radians)
@@ -184,23 +188,41 @@ def empty3dPyarray(rows,cols,lays): #create empty 3d python array
 
 import numpy as np
 import timeit
-def adaptive_timeit(func,timed=True):
-    # this times func() (can't have any arguments) over ~ 4-8 secs and returns a single-execution run time in seconds
-    # (define func using a lambda function with no arguments before hand ... )
+def adaptive_timeit(func,timed=True,repeats = 5,runtime=3):
     result = func() #get the actual result of the function
     if timed is not True: #don't bother timing
         return result,np.NaN
-
-    #find the correct number to take 0.75-1.5 secs
-    number = 5  # 5 iterations to start
-    while True:
-        # Time how long it takes for 'number' iterations
-        elapsed_time = timeit.timeit(lambda: func(), number=number)
-        if elapsed_time >= 0.75: 
+    # determine appropriate number of executions
+    for index in range(0, 10):
+        number = 10 ** index
+        time_number = timeit.timeit(func,number=number)
+        if time_number >= runtime/(repeats*10):
             break
-        number *= 2  # Double number of iterations
+    if number == 1: #for long functions
+        repeats = 3
+    xcts = timeit.repeat(func, number=number, repeat=repeats)
+    return result, np.min(xcts)/number 
 
-    # Now use 'repeat' to run the test multiple times
-    times = timeit.repeat(lambda: func(), number=number, repeat=5)
-    #this should take ~4-8 secs
-    return result,min(times)/number  # Return the best time
+from scipy.stats import vonmises
+def vonMises_wr(Uav,kappa,dir=0,NO_BINS=72):
+    # return a wind rose with direction probability defined
+    # by the von Mises function
+    # wind speed is uniform 
+    # dir = 0 by default which is West in the polar coord system
+    theta_i = np.linspace(0,2*np.pi,NO_BINS,endpoint=False)
+    U_i = Uav*np.ones_like(theta_i)
+    P_i = vonmises.pdf(dir, kappa, theta_i)
+    P_i = P_i / np.sum(P_i) #normalise to ensure sum to 1
+    return U_i,P_i,theta_i
+
+from utilities.poissonDiscSampler import PoissonDisc
+def random_layouts(layout_n,width=42,min_r=5.1,k=30):
+    #returns list of 2d coord arrays
+    layout_list = []
+    for i in range(layout_n):
+        sampler = PoissonDisc(width,width,min_r,k)
+        coords = sampler.sample()
+        layout = np.asarray(coords)
+        layout = layout - width/2 #center around (0,0)
+        layout_list.append(layout)
+    return layout_list

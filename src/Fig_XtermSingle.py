@@ -9,13 +9,13 @@ rc('text', usetex=True)
 import numpy as np
 SAVE_FIG = False
 
-NT = 5 #number of turbines 
-SPACING = 7 #turbine spacing normalised by rotor DIAMETER
+NT = 4 #number of turbines 
+SPACING = 5 #turbine spacing normalised by rotor DIAMETER
 XPAD = 7 #X border in normalised rotor DIAMETERS
 YPAD = 7 #Y border in normalised rotor DIAMETERS
 BINS = 360 #number of wind bins
 U_inf = 10 #inflow wind speed
-U_LIM = 4 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
+U_LIM = None #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
 K = 0.03
 
 CP_LOWER = 0 #wind speed lower lim for plotting

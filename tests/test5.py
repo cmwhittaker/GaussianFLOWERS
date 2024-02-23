@@ -91,22 +91,8 @@ ax3.plot(x,y)
 #%% next is numerical implementation of JENSEN FLOWERS
 
 from utilities.helpers import trans_bearing_to_polar,rectangular_domain,find_relative_coords,get_floris_wind_rose,get_floris_wind_rose_WB
-def JF_num(U_i,P_i,theta_i,plot_points,layout,turb,K,RHO=1.225):
-    #numerical convolution using the 2nd order taylor approximation of the Jesen wake model
-    r_jk,theta_jk = find_relative_coords(plot_points,layout)
 
-    U_wav = np.sum(U_i*P_i)
-    theta_ijk = theta_jk[None,:,:] - theta_i[:,None,None]
-    r_ijk =  np.broadcast_to(r_jk[None,:,:],theta_ijk.shape)
-    U_ijk = np.broadcast_to(U_i[:,None,None],theta_ijk.shape)
-    P_ijk = np.broadcast_to(P_i[:,None,None],theta_ijk.shape)
-
-    DU_wav = np.sum(U_ijk*P_ijk*(U_delta_J3(U_ijk,r_ijk,theta_ijk,K,r_lim=0.5)),axis=(0,2))
-
-    U_w_wav = U_wav - DU_wav
-    alpha = ((0.5*RHO*turb.A)/(1*10**6)) #turbine cnst
-    aep = alpha*turb.Cp_f(U_w_wav)*U_w_wav**3
-    return aep,U_w_wav
+from utilities.AEP3_functions import JF_num
 
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))
 
@@ -277,6 +263,7 @@ c_04 = np.sum(U_i4*P_i4)/np.pi
 flr_aep4,_ = jflowers(Fourier_coeffs4_Ct,layout,layout,turb,K,c_04)
 
 from utilities.flowers_interface import FlowersInterface
+
 #also using Locasio's version(different theta coord system)
 flower_int = FlowersInterface(U_i4,P_i4,np.rad2deg(3*np.pi/2-theta_i4), layout, turb,num_terms=len(a_n), k=K) 
 LC_flower_aep2 = np.sum(flower_int.calculate_aep())
@@ -286,8 +273,23 @@ print(f"numerical aep    : {np.sum(num_aep4):.6f}")
 print(f"my Jensen FLOWERS: {np.sum(flr_aep4):.6f} (with {len(U_i4)} bins) ({pce(np.sum(num_aep4),np.sum(flr_aep4)):+.3f}%)")
 print(f"LC2              : {LC_flower_aep2:.6f}")
 
-#%%
+#%% and what about the time difference?
+from utilities.helpers import adaptive_timeit
+from utilities.plotting_funcs import si_fm
 
+GF_func = lambda: jflowers(Fourier_coeffs4_Ct,layout,layout,turb,K,c_04)
+LC_func = lambda: flower_int.calculate_aep()
+
+_,GF_time = adaptive_timeit(GF_func)
+_,LC_time = adaptive_timeit(LC_func)
+
+#%%
+print("Timings")
+print(f"GF time:{si_fm(GF_time)}s")
+print(f"LC time:{si_fm(LC_time)}s")
+
+
+#%%
 layout = rectangular_layout(6,7,np.deg2rad(0))
 
 def rotate_layout_L(layout,rot):

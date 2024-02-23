@@ -12,6 +12,9 @@ def si_fm(number):
     # Display a value to 3dp in scientific forma using SI prefix
     # e.g. 1234 is 1.23k
 
+    if number == np.nan:
+        return "NAN"
+
     prefixes = {
         24: 'Y',  # yotta
         21: 'Z',  # zetta

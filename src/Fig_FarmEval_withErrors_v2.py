@@ -30,8 +30,8 @@ ALIGN_WEST = False
 
 SYNTHETIC_WR = True
 if SYNTHETIC_WR: 
-    U_AVs = [6,10,12] # [10,10,10] [5,10,15]
-    site_var = [10,10,10] # [5,5,5] [ 1, 5,20] 
+    U_AVs = [10,10,10]  # [10,10,10] [5,10,15] [6,10,12]
+    site_var = [ 1, 5,20]  # [5,5,5] [ 1, 5,20] 
     #site_var is the kappa concentration parameter
 else:
     #site_var is the site number (from the real wind roses)
@@ -42,11 +42,13 @@ spacing = [7,7,7]  #[7,7,7] [9,7,5]
 
 from utilities.helpers import random_layouts
 np.random.seed(1)
+
 lay_sample = [random_layouts(1)[0],]
 layouts = lay_sample*3
-# layout = []
-# widths = [30,42,54] #[54,42,30] 
-# min_rs = [5.1,5.1,5.1] #[6.7,5.1,3.7] 
+
+# layouts = []
+# widths = [54,42,30] #[54,42,30] [30,42,54] [42,42,42]
+# min_rs = [6.7,5.1,3.7]  #[6.7,5.1,3.7] # [5.1,5.1,5.1]
 # for i in range(3):
 #     layouts.append(random_layouts(1,width=widths[i],min_r=min_rs[i])[0])
 
@@ -126,7 +128,6 @@ for i in range(ROWS): #for each wind rose (site)
     _,Fourier_coeffs_noCp_PA = simple_Fourier_coeffs((P_i[:,i]*U_i[:,i]*len(P_i[:,i]))/(2*np.pi))
     #weight ct by power production
     wav_Ct = get_WAV_pp(U_i[:,i],P_i[:,i],turb,turb.Ct_f) 
-    print(wav_Ct)
 
     #for Jensen FLOWERS, the Fourier coeffs are found from
     # 1-sqrt(ct) etc.
@@ -219,7 +220,7 @@ for i in range(ROWS): #for each wind rose (site)
 
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
 
-#%
+#%%
 #% Another ... version of the figure
 #you need to run the cell above first
 
@@ -298,8 +299,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 wspace = 0.2
-gs = GridSpec(12, 4, height_ratios=[14,14,1,1,1,1,1,1,1,12,12,12],wspace=0.2,hspace=0.15)
-fig = plt.figure(figsize=(7.8,8.9), dpi=300) #figsize=(7.8,8)
+gs = GridSpec(12, 4, height_ratios=[14,14,1,1,1,1,1,1,1,8,8,8],wspace=0.2,hspace=0.15)
+fig = plt.figure(figsize=(7.8,8), dpi=300) #figsize=(7.8,8)
 
 cont_lim = (np.min(Uwff),np.max(Uwff))
 
@@ -310,7 +311,7 @@ for i in range(3): #for each COLUMN
     y1 = U_i[:,i]*P_i[:,i]
     nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$")
     #next is the contourf
-    Z2 = pce(powj_a[i][dc], powj_d[i][dc])
+    Z2 = pce(powj_b[i][dc], powj_d[i][dc]) #this is changed!
     xt,yt = layout[i][dc][:,0],layout[i][dc][:,1]
     if i == 1:
         cb_label = True
@@ -329,7 +330,7 @@ for i in range(ROWS):
         aep_d[i,j] = np.sum(powj_d[i][j])
         aep_g[i,j] = np.sum(powj_g[i][j])
 
-aep_arr = np.dstack([aep_a, aep_b,aep_c,aep_d,aep_g])
+aep_arr = np.dstack([aep_b,aep_d])
 
 list_x = [1.2,1.2,1.2,1]
 colWidths =  [_/4.6 for _ in list_x]
@@ -337,7 +338,7 @@ colWidths =  [_/4.6 for _ in list_x]
 #AEP table
 aep_table_ax = fig.add_subplot(gs[9,:])
 aep_table_ax.axis('off')
-hdr_list = ['CumulativeCurl','Numerical Integration','Vect Num Integration','GaussianFLOWERS','JensenFLOWERS']
+hdr_list = ['Numerical Integration','GaussianFLOWERS']
 aep_row_txt = []
 aep_table_text = [['\\textbf{AEP}','','','']]
 for i in range(len(hdr_list)): #for each row
@@ -350,25 +351,25 @@ for i in range(len(hdr_list)): #for each row
 
 aep_table_ax.table(cellText=aep_table_text, loc='center',colWidths=colWidths,cellLoc='left',edges='open')
 
-time_arr = np.dstack([time_a,time_b,time_c,time_d,time_g])
+time_arr = np.dstack([time_b,time_d,time_g])
 
-#performance table
-prf_table_ax = fig.add_subplot(gs[10,:])
-prf_table_ax.axis('off')
-hdr_list = ['CumulativeCurl','Numerical Integration','Vect Num Integration','GaussianFLOWERS','JensenFLOWERS']
-prf_row_hdr = []
-prf_table_text = [['\\textbf{Performance}','','','']]
-for i in range(len(hdr_list)): #for each row
-    prf_row_hdr.append(hdr_list[i]) #first is the name
-    for j in range(ROWS): #next 3 are data
-        prf_row_hdr.append(f'{si_fm(time_arr[j,dc,i])}s ({time_arr[j,dc,0]/time_arr[j,dc,i]:.1f})')
+# #performance table
+# prf_table_ax = fig.add_subplot(gs[10,:])
+# prf_table_ax.axis('off')
+# hdr_list = ['Numerical Integration','GaussianFLOWERS','JensenFLOWERS']
+# prf_row_hdr = []
+# prf_table_text = [['\\textbf{Performance}','','','']]
+# for i in range(len(hdr_list)): #for each row
+#     prf_row_hdr.append(hdr_list[i]) #first is the name
+#     for j in range(ROWS): #next 3 are data
+#         prf_row_hdr.append(f'{si_fm(time_arr[j,dc,i])}s ({time_arr[j,dc,0]/time_arr[j,dc,i]:.1f})')
                     
-    prf_table_text.append(prf_row_hdr)
-    prf_row_hdr = [] #clear row    
-prf_table_ax.table(cellText=prf_table_text, loc='center',colWidths=colWidths,cellLoc='left',edges='open')
+#     prf_table_text.append(prf_row_hdr)
+#     prf_row_hdr = [] #clear row    
+# prf_table_ax.table(cellText=prf_table_text, loc='center',colWidths=colWidths,cellLoc='left',edges='open')
 
 #Error contibution table
-err_table_ax = fig.add_subplot(gs[11,:])
+err_table_ax = fig.add_subplot(gs[10,:])
 err_table_ax.axis('off')
 #hdr_list = ['Thrust Coeff','Power Coeff','Cross Terms','Small Angle']
 hdr_list = ['$C_t(U_w)\\approx \\overline{{C_t}}$','$C_p(U_w)\\approx C_p(U_\\infty)$','$(\sum x)^N \\approx \sum (x^N)$','Sml Angle','Total']

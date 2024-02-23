@@ -82,11 +82,16 @@ def floris_AV_timed_aep(U_i, P_i, thetaD_i, layout, turb, wake=True, timed=True)
 def jflowers(Fourier_coeffs1,
              plot_points,layout,
              turb,
-             K,
+             Kj,
              c_0,
              RHO=1.225,
              r_lim=0.5):
     #my attempt at optimising the jensen flowers code written by Michael
+
+    #Kj is the JENSEN wake expansion parameter! 
+    if Kj == 0.03:
+        print("Kj == 0.03 - Have you confused the expansion parameters?")
+    #do not confuse with K of the GAUSSIAN model
     
     r_nm,theta_nm = find_relative_coords(plot_points,layout)
 
@@ -97,14 +102,14 @@ def jflowers(Fourier_coeffs1,
 
     # Critical polar angle of wake edge (as a function of distance from turbine)
     theta_c = np.arctan(
-        (1 / (2*r_nm) + K * np.sqrt(1 + K**2 - (2*r_nm)**(-2)))
-        / (-K / (2*r_nm) + np.sqrt(1 + K**2 - (2*r_nm)**(-2)))
+        (1 / (2*r_nm) + Kj * np.sqrt(1 + Kj**2 - (2*r_nm)**(-2)))
+        / (-Kj / (2*r_nm) + np.sqrt(1 + Kj**2 - (2*r_nm)**(-2)))
         ) 
     theta_c = np.nan_to_num(theta_c)
     
     # Contribution from zero-frequency Fourier mode
-    du = a_0 * theta_c / (2 * K * r_nm + 1)**2 * (
-        1 + (2*(theta_c)**2 * K * r_nm) / (3 * (2 * K * r_nm + 1)))
+    du = a_0 * theta_c / (2 * Kj * r_nm + 1)**2 * (
+        1 + (2*(theta_c)**2 * Kj * r_nm) / (3 * (2 * Kj * r_nm + 1)))
     
     # Reshape variables for vectorized calculations
     m = np.arange(1, len(a_n)+1) #half open interval
@@ -116,9 +121,9 @@ def jflowers(Fourier_coeffs1,
 
     # Vectorized contribution of higher Fourier modes
     du += np.sum(
-        (2*(a * np.cos(m*theta_nm) + b * np.sin(m*theta_nm)) / (m * (2 * K * r_nm + 1))**3 *
+        (2*(a * np.cos(m*theta_nm) + b * np.sin(m*theta_nm)) / (m * (2 * Kj * r_nm + 1))**3 *
         (
-        np.sin(m*theta_c)*(m**2*(2*K*r_nm*(theta_c**2+1)+1)-4*K*r_nm)+ 4*K*r_nm*theta_c*m *np.cos(theta_c * m))
+        np.sin(m*theta_c)*(m**2*(2*Kj*r_nm*(theta_c**2+1)+1)-4*Kj*r_nm)+ 4*Kj*r_nm*theta_c*m *np.cos(theta_c * m))
         ), axis=2)
     
     du = np.where(mask_area,0,du) #apply mask to stop self-produced wakes
@@ -217,7 +222,8 @@ def num_Fs(U_i,P_i,theta_i,
            u_lim=None,
            Ct_op=1,wav_Ct=None,
            Cp_op=1,wav_Cp=None,
-           cross_ts=True,ex=True,cube_term=True):
+           cross_ts=True,ex=True,cube_term=True,
+           ff=False):
     """ 
     "general purpose" numerical equivalent of the many different options to handle the aep calcuation integration. 
     (the overlap in functionality between this and ntag, vect_num_Fs and caag is useful for validation)
@@ -293,10 +299,10 @@ def num_Fs(U_i,P_i,theta_i,
 
     DUt_ijk = np.zeros((len(U_i),len(x_n),len(x_n)))
     Uwt_ij = U_i[:,None]*np.ones((1,x_n.shape[0])) #turbine Uws
-
-    DUff_ijk = np.zeros((len(U_i),len(X),len(x_n)))
-    Uwff_ij = U_i[:,None]*np.ones(((1,X.shape[0])))
-    
+    if ff:
+        DUff_ijk = np.zeros((len(U_i),len(X),len(x_n)))
+        Uwff_ij = U_i[:,None]*np.ones(((1,X.shape[0])))
+        
     #the actual calculation loop
     for i in range(len(U_i)): #for each wind direction
         
@@ -309,8 +315,9 @@ def num_Fs(U_i,P_i,theta_i,
             Rt = np.sqrt((x_n-x_m)**2+(y_n-y_m)**2)
             THETAt = np.arctan2(y_n-y_m,x_n-x_m) - theta_i[i] 
             #calculate relative plot_points (flow field ff) locations
-            Rff = np.sqrt((X-x_m)**2+(Y-y_m)**2)
-            THETAff = np.arctan2(Y-y_m,X-x_m) - theta_i[i]
+            if ff:
+                Rff = np.sqrt((X-x_m)**2+(Y-y_m)**2)
+                THETAff = np.arctan2(Y-y_m,X-x_m) - theta_i[i]
             
             #then there are a few ways of defining the thrust coefficient
             if Ct_op == 1: #base on local velocity
@@ -325,14 +332,12 @@ def num_Fs(U_i,P_i,theta_i,
                 raise ValueError("Ct_op is not supported")
 
             DUt_ijk[i,:,m] = deltaU_by_Uinf_f(Rt,THETAt,Ct,K,u_lim,ex)
-            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,m] #sum over superposistion for each turbine (turbine U_ws)            
-            DUff_ijk[i,:,m] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K,u_lim,ex)
-            
-            Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,m] #sum over superposistion for eah turbine (flow field)
-    
-    num_Fs.DUt_ijk = DUt_ijk #debugging
-    num_Fs.DUff_ijk = DUff_ijk #(slightly hacky) this is for the cross-term plot (i don't want to change the signature just for this one use case)
-    
+            Uwt_ij[i,:] = Uwt_ij[i,:] - U_i[i]*DUt_ijk[i,:,m] #sum over superposistion for each turbine (turbine U_ws)   
+            if ff:         
+                DUff_ijk[i,:,m] = deltaU_by_Uinf_f(Rff,THETAff,Ct,K,u_lim,ex)
+                
+                Uwff_ij[i,:] = Uwff_ij[i,:] - U_i[i]*DUff_ijk[i,:,m] #sum over superposistion for eah turbine (flow field)
+        
     if cross_ts: #INcluding cross terms
         if cube_term == False:
             raise ValueError("Did you mean to neglect the cross terms?")
@@ -367,8 +372,11 @@ def num_Fs(U_i,P_i,theta_i,
         raise ValueError("Cp_op value is not supported")
     #(j in Uwff_j here is indexing the meshgrid)
     Uwt_j = np.sum(P_i[:,None]*Uwt_ij,axis=0)
-    Uwff_j = np.sum(P_i[:,None]*Uwff_ij,axis=0) #probability weighted flow field
-    
+    if ff:
+        Uwff_j = np.sum(P_i[:,None]*Uwff_ij,axis=0) #probability weighted flow field
+    else:
+        Uwff_j = np.nan
+        
     return pow_j,Uwt_j,Uwff_j 
 
 def vect_num_F(U_i,P_i,theta_i,
@@ -479,8 +487,6 @@ def ntag_PA(Fourier_coeffs3_PA,
     lim = (np.sqrt(wav_Ct/8)-EP)/K
     lim = np.where(lim<u_lim,u_lim,lim) #pick greater from u_lim and lim
 
-    if np.any((r_jk<lim) & (r_jk != 0)) & ~flo_vis:
-        raise ValueError("turbines within the invalid region, this will likely cause erroneously low AEP. For flow visualisation set flo_vis True.")
     #if turbine 1 is posistioned adjacent to turbine 2, neither upwind or downwind (""inline with each other, perpendicular to the wind direction"")", if within the r limit, turbine 1 will be waked by turbine 2 - which is not realistic (or atleast not as described by Bastankah 2014)
     sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) 
     
@@ -501,8 +507,6 @@ def ntag_PA(Fourier_coeffs3_PA,
     #alpha is the 'energy' content of the wind
     alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) #- term(3)
     
-    #(I fully vectorised this and it ran slower ... so I'm sticking with this)
-    #If it were vectorised using dimensions sparingly (e.g. don't broadcast everything to 4D (alpha,J,K,N) ) immediately) it might be faster
     if r_jk.shape[0] == r_jk.shape[1]: #farm aep calculation
         pow_j = (0.5*turb.A*RHO*alpha)/(1*10**6)
     else: #farm wake visualisation, power is meaningless
@@ -567,3 +571,33 @@ def caag_PA(Fourier_coeffs_noCp_PA,
         pow_j = np.nan
 
     return pow_j,alpha
+
+def JF_num(U_i,P_i,theta_i,plot_points,layout,turb,K,RHO=1.225):
+    #numerical convolution using the 2nd order taylor approximation of the Jesen wake model
+
+    def U_delta_J3(U_i,r,theta,K,r_lim=0.5):
+        # U delta Jesen using 2nd Order Taylor approximation
+        # using POLAR coordinates
+        theta = np.mod(theta + np.pi, 2 * np.pi) - np.pi
+        #second order taylor series approximation of the Jesen wake model
+        Ct = turb.Ct_f(U_i) #base thrust coefficent on free stream
+        du = (1-np.sqrt(1-Ct))*(1/(2*K*r+1)**2+(2*K*r*theta**2)/(2*K*r+1)**3)
+        theta_c = np.arctan2((1 / (2*r) + K * np.sqrt(1 + K**2 - (2*r)**(-2))),(-K / (2*r) + np.sqrt(1 + K**2 - (2*r)**(-2)))) 
+        w = np.where((-theta_c<=theta)&(theta<=theta_c),1,0)
+        w = np.where(r<r_lim,0,w) #no wake in rotor diameter (stop self-produced wakes)
+        return du*w
+
+    r_jk,theta_jk = find_relative_coords(plot_points,layout)
+
+    U_wav = np.sum(U_i*P_i)
+    theta_ijk = theta_jk[None,:,:] - theta_i[:,None,None]
+    r_ijk =  np.broadcast_to(r_jk[None,:,:],theta_ijk.shape)
+    U_ijk = np.broadcast_to(U_i[:,None,None],theta_ijk.shape)
+    P_ijk = np.broadcast_to(P_i[:,None,None],theta_ijk.shape)
+
+    DU_wav = np.sum(U_ijk*P_ijk*(U_delta_J3(U_ijk,r_ijk,theta_ijk,K,r_lim=0.5)),axis=(0,2))
+
+    U_w_wav = U_wav - DU_wav
+    alpha = ((0.5*RHO*turb.A)/(1*10**6)) #turbine cnst
+    aep = alpha*turb.Cp_f(U_w_wav)*U_w_wav**3
+    return aep,U_w_wav
