@@ -1,4 +1,7 @@
 #%% Produce the 3x3 wind roses(sites)xlayouts figure that compares the accuracy of Gaussian FLOWERS to a floris reference
+
+# V2 simplifies the figure to only compare num int and GF
+
 # there are 6 methods being evaluated at once (most will be removed before publishing)
 # this "with errors" version adds an additional panel in the bottom left that shows
 # the contribution of each of the assumptions on the final accuracy (assuming that they are independent - which is semi-true)
@@ -28,32 +31,44 @@ Kj = 0.05 #expansion parameter for the Jensen model
 NO_BINS = 72 #number of bins in the wind rose
 ALIGN_WEST = False
 
-SYNTHETIC_WR = True
-if SYNTHETIC_WR: 
-    U_AVs = [10,10,10]  # [10,10,10] [5,10,15] [6,10,12]
-    site_var = [ 1, 5,20]  # [5,5,5] [ 1, 5,20] 
-    #site_var is the kappa concentration parameter
-else:
-    #site_var is the site number (from the real wind roses)
-    site_var = [9,1,6] # [2,1,8]:[30,40,25] 
+SYNTHETIC_WR = True #(they are all synthetic)
 
-turb_n = [5,7,9] # [7,7,7] [5,7,9]
-spacing = [7,7,7]  #[7,7,7] [9,7,5] 
-
+FIG_VAR = 3 #Figure variation
 from utilities.helpers import random_layouts
 np.random.seed(1)
+if FIG_VAR==1: #varying inflow velocities
+    U_AVs = [6,10,12]
+    site_var = [5,5,5]
+    layouts = [random_layouts(1)[0],]*3
+elif FIG_VAR==2: #varying density
+    U_AVs = [10,10,10]
+    site_var = [5,5,5]
+    layouts = []
+    widths = [54,42,30] #[70,52,38.5]
+    min_rs = [6.455,5.084,3.73] #[8,6.3,4.6]
+    for i in range(3):
+        layouts.append(random_layouts(1,width=widths[i],min_r=min_rs[i])[0])
+elif FIG_VAR==3: #varying size
+    U_AVs = [10,10,10]
+    site_var = [5,5,5]
+    layouts = []
+    widths = [32,42,54]
+    min_rs = [5.08,5.08,5.08]
+    for i in range(3):
+        layouts.append(random_layouts(1,width=widths[i],min_r=min_rs[i])[0])
+else:
+    raise ValueError("Incorrect FIG_NO selected")
 
-lay_sample = [random_layouts(1)[0],]
-layouts = lay_sample*3
+# #"meta" information about the layout used
+# from sklearn.metrics.pairwise import euclidean_distances
 
-# layouts = []
-# widths = [54,42,30] #[54,42,30] [30,42,54] [42,42,42]
-# min_rs = [6.7,5.1,3.7]  #[6.7,5.1,3.7] # [5.1,5.1,5.1]
 # for i in range(3):
-#     layouts.append(random_layouts(1,width=widths[i],min_r=min_rs[i])[0])
-
-rot = [45,45,45] #optimal rotation
-
+#     layout = layouts[i]
+#     distances = euclidean_distances(layout,layout)
+#     distances[distances<0.1]=np.nan #remove distance from point to itsel
+#     m_nearest_dists= np.mean(np.nanmin(distances,axis=1))
+#     print(f"N_turbs ={len(layout)},m_nearest_dists:{m_nearest_dists:.2f}")
+    
 ROWS = len(site_var) #number of sites
 COLS = 1 #number of layout variations
 
@@ -220,12 +235,13 @@ for i in range(ROWS): #for each wind rose (site)
 
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
 
-#%%
+#%
 #% Another ... version of the figure
 #you need to run the cell above first
 
 from utilities.plotting_funcs import si_fm
 from utilities.helpers import pce
+from matplotlib import cm
 
 from matplotlib import rc
 rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
@@ -235,7 +251,7 @@ from matplotlib.colors import LinearSegmentedColormap
 colors = ["black", "white"]
 cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
 
-def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
+def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True,wr_label=None):
     ax = fig.add_subplot(gs,projection='polar')
     if bar:
         ax.bar(x,y,color='grey',linewidth=1,width=2*np.pi/72)
@@ -249,35 +265,50 @@ def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.2)
     ax.annotate(ann_txt, xy=(0.4,0.75), ha='center', va='bottom',color='black',xycoords='axes fraction',rotation='vertical',bbox=props)
     ax.spines['polar'].set_visible(False)
+    if wr_label is not None:
+        ax.annotate(wr_label, xy=(0,-0.05), ha='left', va='bottom',color='black',xycoords='axes fraction',rotation='horizontal',bbox=props,fontsize=9)
     return None
 
-def nice_composite_plot_v03B(fig,cf_gs,cb_gs,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None),cb_label=False):
+def nice_composite_plot_v03B(fig,cf_gs,ff_cb_gs,e_cb_gs,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None),ff_cb_label=False,e_cb_label=False,farm_label=None):
     ax = fig.add_subplot(cf_gs)
 
     xticks = ax.xaxis.get_major_ticks()
     xticks[2].set_visible(False)
-    ax.set_xlabel('$x/d_0$',labelpad=-9)
+    ax.set_xlabel('$x/D$',labelpad=-9)
 
     yticks = ax.yaxis.get_major_ticks()
     yticks[2].set_visible(False)
-    ax.set_ylabel('$y/d_0$',labelpad=-19)
+    ax.set_ylabel('$y/D$',labelpad=-19)
     ax.yaxis.set_tick_params(pad=0)
+    
     #contourf
     vmin,vmax = cont_lim
-    cf = ax.contourf(X,Y,Z1,50,cmap=cmap1,vmin=vmin,vmax=vmax)
-    #scatter plot
-    color_list = plt.cm.viridis(np.linspace(1, 0, 8))
-    from matplotlib.colors import ListedColormap
-    cmap = ListedColormap(color_list)
-    sp = ax.scatter(xt,yt,c=Z2,cmap=cmap,marker='x',s=10)
-    #sp = ax.scatter(xt,yt,marker='x',s=10,c='black')
-    cax = fig.add_subplot(cb_gs)
-    cb = fig.colorbar(sp, cax=cax, cmap=cmap,orientation='horizontal',format='%.3g') #the per turbine colourbar
+    cf = ax.contourf(X,Y,Z1,50,cmap=cm.gray)
+
+    #greyscale velocity colourbar
+    ff_cb_ax = fig.add_subplot(ff_cb_gs)
+    ff_cb = fig.colorbar(cf, cax=ff_cb_ax, cmap=cm.gray,orientation='horizontal',format='%.3g')
     from matplotlib.ticker import MaxNLocator
-    cb.ax.xaxis.set_major_locator(MaxNLocator(5))
-    if cb_label:
-        cb.set_label("Per-turbine error in AEP / \%")
+    ff_cb.ax.xaxis.set_major_locator(MaxNLocator(5))
+    if ff_cb_label:
+        ff_cb.set_label("Average wind velocity / $ms^{-1}$")
     ax.set(xlim=(-EXTENT, EXTENT), ylim=(-EXTENT, EXTENT))
+
+    #coloured scatter plot at turbine locations
+    sp = ax.scatter(xt,yt,c=Z2,cmap=cm.viridis,marker='o',s=3,lw=1)
+    e_cb_ax = fig.add_subplot(e_cb_gs)
+
+    #scatter plot colourbar
+    e_cb = fig.colorbar(sp, cax=e_cb_ax, cmap=cm.viridis,orientation='horizontal',format='%.3g') #the per turbine colourbar
+    from matplotlib.ticker import MaxNLocator
+    e_cb.ax.xaxis.set_major_locator(MaxNLocator(5))
+    if e_cb_label:
+        e_cb.set_label("Per-turbine error in AEP / \%")
+    ax.set(xlim=(-EXTENT, EXTENT), ylim=(-EXTENT, EXTENT))
+
+    if farm_label is not None:
+        props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.2)
+        ax.annotate(farm_label, xy=(0.05,0.05), ha='left', va='bottom',color='black',xycoords='axes fraction',rotation='horizontal',bbox=props,fontsize=7)
 
     return cf
 
@@ -295,6 +326,12 @@ def ill_cb(gs,cont_lim):
     
     return None
 
+from sklearn.metrics.pairwise import euclidean_distances
+def find_m_nearest_dists(layout):
+    distances = euclidean_distances(layout,layout)
+    distances[distances<0.1]=np.nan
+    return np.mean(np.nanmin(distances,axis=1))
+
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
@@ -308,18 +345,31 @@ dc = 0 #data column
 #this iterates over the columns first then the rows 
 for i in range(3): #for each COLUMN
     #first row is the wind roses
+
+    farm_label = wr_label = None
+    if FIG_VAR == 1:
+        wr_label = f"$U_{{0,i}}={U_AVs[i]}ms^{{-1}}$"
+    elif FIG_VAR == 2:
+        farm_label = f"{widths[i]/7:.0f}D Eq. Spacing"
+    elif FIG_VAR ==3:
+        farm_label = f"{len(layouts[i])} Turbines"
+
     y1 = U_i[:,i]*P_i[:,i]
-    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$")
+    
+    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$",wr_label=wr_label)
     #next is the contourf
     Z2 = pce(powj_b[i][dc], powj_d[i][dc]) #this is changed!
     xt,yt = layout[i][dc][:,0],layout[i][dc][:,1]
     if i == 1:
-        cb_label = True
+        e_cb_label = True
+        ff_cb_label = True
     else:
-        cb_label = False
-    cf = nice_composite_plot_v03B(fig,gs[1,i+1],gs[3,i+1],Uwff[i][dc].reshape(X.shape),X,Y,Z2,xt,yt,errors,cont_lim=cont_lim,cb_label=cb_label)
+        e_cb_label = False
+        ff_cb_label = False
     
-ill_cb(gs[7,1:],cont_lim) #'illustrative' colourbar on bottom row
+    cf = nice_composite_plot_v03B(fig,gs[1,i+1],gs[3,i+1],gs[7,i+1],Uwff[i][dc].reshape(X.shape),X,Y,Z2,xt,yt,errors,cont_lim=cont_lim,ff_cb_label=ff_cb_label,e_cb_label=e_cb_label,farm_label=farm_label)
+    
+#ill_cb(gs[7,1:],cont_lim) #'illustrative' colourbar on bottom row
 
 aep_a,aep_b,aep_c,aep_d,aep_g = [np.zeros((ROWS,COLS)) for _ in range(5)]
 for i in range(ROWS):
@@ -414,184 +464,16 @@ ax.plot(n,u)
 ax.plot(n,p)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#%% simple no wake sanity check
-n,m = 2,2
-Nt =  layout[n][m].shape[0]
-alpha = ((0.5*1.225*turb.A)/(1*10**6))
-no_wake_p = Nt*alpha*np.sum(P_i[:,n]*turb.Cp_f(U_i[:,n])*U_i[:,n]**3)
-print("no_wake_p: {}".format(no_wake_p))
-#this is approximately correct ...
-
-#%% old version of the figure
-# uses aep_h (the floris without av wind speed binning) as a reference, which I no longer use 
-
-def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None)):
-    ax = fig.add_subplot(gs[2*i,j+1])
-
-    xticks = ax.xaxis.get_major_ticks()
-    xticks[2].set_visible(False)
-    ax.set_xlabel('$x/d_0$',labelpad=-9)
-
-    yticks = ax.yaxis.get_major_ticks()
-    yticks[2].set_visible(False)
-    ax.set_ylabel('$y/d_0$',labelpad=-19)
-    #contourf
-    vmin,vmax = cont_lim
-    cf = ax.contourf(X,Y,Z1,50,cmap=cmap1,vmin=vmin,vmax=vmax)
-    #scatter plot
-    color_list = plt.cm.coolwarm(np.linspace(0, 1, 8))
-    from matplotlib.colors import ListedColormap
-    cmap = ListedColormap(color_list)
-    sp = ax.scatter(xt,yt,c=Z2,cmap=cmap,marker='x',s=10)
-    #sp = ax.scatter(xt,yt,marker='x',s=10,c='black')
-    cax = fig.add_subplot(gs[2*i+1,j+1])
-    cb = fig.colorbar(sp, cax=cax, cmap=cmap,orientation='horizontal',format='%.3g') #the per turbine colourbar
-    from matplotlib.ticker import MaxNLocator
-    cb.ax.xaxis.set_major_locator(MaxNLocator(5))
-    ax.set(xlim=(-EXTENT, EXTENT), ylim=(-EXTENT, EXTENT))
-    if i==2 and j==1: #middle bottom label the colourbar
-        cb.set_label("Per-turbine error in AEP / \%")
-
-    #Then the farm total values:
-    props = dict(boxstyle='round', facecolor='white', alpha=0.8,pad=0.2)
-
-    aep_a = np.sum(powj_a[i][j]) #floris reference
-    aep_b = np.sum(powj_b[i][j]) #analytical AEP directly
-    aep_c = np.sum(powj_c[i][j]) #AEP from cubed weight average velocity
-    aep_d = np.sum(powj_d[i][j]) 
-    aep_e = np.sum(powj_e[i][j]) 
-    aep_f = np.sum(powj_f[i][j]) 
-    aep_g = np.sum(powj_g[i][j]) 
-    aep_h = np.sum(powj_h[i][j]) 
-
-    aep_ref = aep_h
-    time_ref = time_c[i][j]
-                        
-    top_left_text = f'''CumCurl\hspace{{2.8ex}}:{aep_h:.2f}MW({pce(aep_ref,aep_h):+.1f}\%) 
-    CumCurlav:{aep_a:.2f}MW({pce(aep_ref,aep_a):+.1f}\%) in {si_fm(time_a[i][j])}s({time_ref/time_a[i][j]:.2f}) 
-    NumInt*\hspace{{3ex}}:{aep_c:.2f}MW({pce(aep_ref,aep_c):+.1f}\%) in {si_fm(time_c[i][j])}s({time_ref/time_c[i][j]:.2f})
-    GFlowers\hspace{{3ex}}:{aep_d:.2f}MW({pce(aep_ref,aep_d):+.1f}\%) in {si_fm(time_d[i][j])}s({time_ref/time_d[i][j]:.2f})
-    NoWake\hspace{{4ex}}:{aep_f:.2f}MW({pce(aep_ref,aep_f):+.1f}\%)
-    JFlowers\hspace{{3.8ex}}:{aep_g:.2f}MW({pce(aep_ref,aep_g):+.1f}\%) in {si_fm(time_g[i][j])}s({time_ref/time_g[i][j]:.2f})'''
-
-    #NumInt\hspace{{4.6ex}}:{aep_b:.2f}MW({pce(aep_a,aep_b):+.1f}\%)
-    #GFlowers**:{aep_e:.2f}MW({pce(aep_a,aep_e):+.1f}\%) in {si_fm(time_e[i][j])}s({time_a[i][j]/time_e[i][j]:.2f})
-
-    ax.text(0.05,0.95,top_left_text,color='black',transform=ax.transAxes,va='top',ha='left',fontsize=4,bbox=props)
-
-    error_text = f'''Error Contributions
-    $C_t(U_w)\\approx \\overline{{C_t}}$:{errors[0]:+.1f}\%
-    $C_p(U_w)\\approx C_p(U_\\infty)$:{errors[1]:+.1f}\%
-    $(\sum x)^N \\approx \sum (x^N)$:{errors[2]:+.1f}\%
-    Sml Angle:{errors[3]:+.1f}\%
-    Total:{np.sum(errors[:4]):+.1f}\%
-    '''
-    ax.text(0.05,0.05,error_text,color='black',transform=ax.transAxes,va='bottom',ha='left',fontsize=4,bbox=props)
-
-    return cf
-
-def Cp_plot(gs,cont_lim): #the plot of the variation in power coefficient
-    ax = fig.add_subplot(gs)
-    ax.set(xlim=cont_lim)
-    xs = np.linspace(cont_lim[0],cont_lim[1],200)
-    ys = turb.Cp_f(xs)
-    ax.plot9
-    return None
-
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-gs = GridSpec(8, 4, height_ratios=[14,1,14,1,14,1,1,1],wspace=0.3,hspace=0.41)
-fig = plt.figure(figsize=(10,10), dpi=300) #figsize=(7.8,8)
-
-cont_lim = (np.min(Uwff),np.max(Uwff))
-
-from matplotlib.colors import LinearSegmentedColormap
-colors = ["black", "white"]
-cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
-
-for i in range(ROWS): 
-    #first column is the wind rose
-    y1 = U_i[:,i]*P_i[:,i]
-    nice_polar_plot(fig,gs[2*i,0],np.deg2rad(thetaD_i),y1,"$P(\\theta)U(\\theta)$")
-    for j in range(COLS): #then onto the contours
-        Z2 = pce(powj_a[i][j], powj_d[i][j])
-        xt,yt = layout[i][j][:,0],layout[i][j][:,1]
-        cf = nice_composite_plot_v03(fig,gs,i,j,Uwff[i][j].reshape(X.shape),X,Y,Z2,xt,yt,errors[i,j,:],cont_lim=cont_lim) 
-
-ill_cb(gs[7,1:],cont_lim) #'illustrative' colourbar on bottom row
-
-if SAVE_FIG:
-    site_str = ''.join(str(x) for x in site_var)
-    layout_str = ''.join(str(x) for x in turb_n)    
-
-    from pathlib import Path
-
-    current_file_path = Path(__file__)
-    fig_dir = current_file_path.parent.parent / "extra evaluations"
-    fig_name = f"Fig_FarmEval_withErrors_{site_str}_{layout_str}.png"
-    path_plus_name = fig_dir / fig_name
-    
-    plt.savefig(path_plus_name, dpi='figure', format='png', bbox_inches='tight')
-
-    print(f"figure saved as {fig_name}")
-
-plt.show()
-
-    
-
-
 #%% "meta" information about the layout used
 from sklearn.metrics.pairwise import euclidean_distances
-mean_n_tubines = np.mean(layout)
 
-layout = rndm_layout
-n_turbs = (len(layout))
-distances = euclidean_distances(layout,layout)
-distances[distances<0.1]=np.nan #remove distance from point to itsel
-m_nearest_dists= np.mean(np.nanmin(distances,axis=1))
+for i in range(3):
+    layout = layouts[i]
+    distances = euclidean_distances(layout,layout)
+    distances[distances<0.1]=np.nan #remove distance from point to itsel
+    m_nearest_dists= np.mean(np.nanmin(distances,axis=1))
+    print(f"N_turbs ={len(layout)},m_nearest_dists:{m_nearest_dists:.2f}")
+
 
 #%%
 xs = np.linspace(0,30,100)

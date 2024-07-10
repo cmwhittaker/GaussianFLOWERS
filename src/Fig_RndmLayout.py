@@ -224,83 +224,126 @@ mnn_arr = mnn_arr.reshape(ROWS*COLS)
 from matplotlib import rc
 rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
 rc('text', usetex=True)
-
+#%%
 import matplotlib.pyplot as plt
-fig,ax = plt.subplots(figsize=(6,2.5),dpi=200)
+fig,ax = plt.subplots(figsize=(3,1.5),dpi=300)
 
-boxplot = a = ax.boxplot(aep_arr_n.swapaxes(0, 1),showfliers=False,vert=False)
+boxplot = a = ax.violinplot(aep_arr_n.swapaxes(0, 1))
+
+#%%
+
+boxplot = a = ax.boxplot(aep_arr_n.swapaxes(0, 1)[:,1:5],showfliers=False,vert=False)
 median_lines = boxplot['medians']
 for line in median_lines:
     line.set_color('black')
-labels = ['Cumulative Curl (ref.)','Numerical Integration', 'Vectorised Numerical \n Intgration', 'Gaussian-Flowers', 'Jensen-Flowers']
+labels = ['Numerical Integration', 'Vectorised Numerical \n Integration', 'Gaussian-Flowers', 'Jensen-Flowers']
 # Set custom labels for the x-axis points
 ax.set_yticks(range(1, len(labels) + 1))
 _ = ax.set_yticklabels(labels, rotation='horizontal')
 ax.set(xlabel='Normalised AEP')
 ax.invert_yaxis()
 
-#%% the trends 3 row figure
+
+LW = 0.5
+# Set the line width of the boxes
+for box in boxplot['boxes']:
+    # set edge color and line width
+    box.set(linewidth=LW)
+
+# Set the line width of the whiskers
+for whisker in boxplot['whiskers']:
+    whisker.set(linewidth=LW)
+
+# Set the line width of the caps
+for cap in boxplot['caps']:
+    cap.set(linewidth=LW)
+
+# Set the line width of the medians
+for median_err in boxplot['medians']:
+    median_err.set(linewidth=LW)
+
+#%% the trends 3 column figure
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MaxNLocator
-gs = GridSpec(1, 3,wspace=0.1,hspace=0)
+gs = GridSpec(1,4,width_ratios=(1,1,1,0.4),wspace=0.1,hspace=0)
 fig = plt.figure(figsize=(7.8,2), dpi=300) 
 
-#first is
-def lin_reg_scatter(ax,x,y):
-    ax.scatter(x,y,alpha=0.5,edgecolor='none',s=10)
-    # Linear regression 1
-    m, b = np.polyfit(x,y,1)
-    ax.plot(x, m*x + b, lw=1)
+ft = 1 #first time flag
 
-    ax.scatter(x,aep_arr_n[4,:],alpha=0.5,edgecolor='none',s=10)
-    m, b = np.polyfit(x,aep_arr_n[4,:],1)
-    ax.plot(x, m*x + b,lw=1)
+#first is
+def lin_reg_scatter(ax,x):
+    global ft
+    sort_indx = np.argsort(x)
+    xs = x[sort_indx] #x sortef
+
+    y1 = aep_arr_n[3,:][sort_indx] #Gaussian AEP
+    y2 = aep_arr_n[4,:][sort_indx] #Jensen AEP
+
+    ax.scatter(xs,y1,alpha=0.5,s=15,marker='x',label=ft*"GF Points")
+    # Linear regression 1 (Gaussian Flowers)
+    m, b = np.polyfit(xs,y1,1)
+    ax.plot(xs, m*xs + b, lw=1,label=ft*"GF Linear Fit")
+
+    ax.scatter(xs,y2,alpha=0.5,s=15,marker='+',label=ft*"JF Points")
+    #Linear regression 2 (Jensen Flowers)
+    m, b = np.polyfit(xs,y2,1)
+    ax.plot(xs, m*xs + b,lw=1,ls='-',label=ft*"JF Linear Fit")
+    
     
     ax.xaxis.set_major_locator(MaxNLocator(5))
+    ft = 0
+
 
 ax1 = fig.add_subplot(gs[0])
-lin_reg_scatter(ax1,n_turb_arr,aep_arr_n[3,:])
-ax1.set(xlabel="No. Turbines",ylabel="Normalised AEP")
+lin_reg_scatter(ax1,mean_ws_arr)
+ax1.set(xlabel="Mean Wind Speed / $ms^{-1}$",ylabel="Normalised AEP")
 
 ax2 = fig.add_subplot(gs[1])
-lin_reg_scatter(ax2,mean_ws_arr,aep_arr_n[3,:])
-ax2.set(xlabel="Mean Wind Speed / $ms^{-1}$",yticklabels=[])
+lin_reg_scatter(ax2,n_turb_arr)
+ax2.set(xlabel="No. Turbines",yticklabels=[])
 
 ax3 = fig.add_subplot(gs[2])
 ax3.invert_xaxis()
-lin_reg_scatter(ax3,mnn_arr,aep_arr_n[3,:])
-ax3.set(xlabel="Turbine Spacing / D",yticklabels=[])
+lin_reg_scatter(ax3,mnn_arr)
+ax3.set(xlabel="Turbine Spacing / $D$",yticklabels=[])
 
-#%%
-# Initialize an empty list to store IQRs
-iqr_values = []
+#ax4 = fig.add_subplot(gs[3])
+fig.legend(ncols=1,borderaxespad=1.32)
 
-# Extracting the IQR for each method
+#%% get the data to put in the table
+for i in range(len(labels)):
+    data = aep_arr_n[i+1,:]
+    # Median
+    median_err = (np.median(data)-1)*100
+    # IQR
+    Q1 = np.percentile(data, 25)
+    Q3 = np.percentile(data, 75)
+    IQR = Q3 - Q1
+    std_dev = 100*np.std(data,ddof=1) 
 
-b = a['boxes'][3]
+    print(f"{labels[i]}- Err: {median_err:.2f}, IQR:{IQR:.1f}, std: {std_dev:.2f} ")
 
-# Get the y-data of the box which represents the 25th and 75th percentiles
-y_data = b.get_xdata()
-# iqr_values now contains the IQR for each met
-    
-
-
-# The IQR is the difference between the 75th and 25th percentiles
-iqr = y_data[2] - y_data[0]  # Assuming vertical orientation
-
-print(iqr)
-#%%
+#%% layout reference
+import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec 
-gs = GridSpec(5, 5)
+gs = GridSpec(5, 5,wspace=0.3)
 fig = plt.figure(figsize=(8,8), dpi=200) 
-
 
 for i in range(NO_LAYOUTS):
     ax = fig.add_subplot(gs[i])
     ax.set(aspect='equal')
     layout = layouts[i]
-    ax.scatter(layout[:,0],layout[:,1],marker='x',color='black')
+    ax.scatter(layout[:,0],layout[:,1],marker='o',color='black',s=3,lw=1)
     ax.set(xlim=(-EXTENT,EXTENT),ylim=(-EXTENT,EXTENT))
+    xticks = ax.xaxis.get_major_ticks()
+    xticks[2].set_visible(False)
+    ax.set_xlabel('$x/D$',labelpad=-10)
+
+    yticks = ax.yaxis.get_major_ticks()
+    yticks[2].set_visible(False)
+    ax.set_ylabel('$y/D$',labelpad=-15)
+    ax.yaxis.set_tick_params(pad=0)
 
 
 #%%

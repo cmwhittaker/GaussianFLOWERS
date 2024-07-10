@@ -1,4 +1,4 @@
-#%% this is the simple appendix figure showing the negative power predicion
+#%% this is the "simple" appendix figure showing the negative power predicion
 
 import numpy as np
 from utilities.turbines import iea_10MW
@@ -13,14 +13,14 @@ YPAD = 7 #Y border in normalised rotor DIAMETERS
 U_inf = 10 #inflow wind speed
 U_LIM = None #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
 K = 0.03
-XRES = 400 #number of x points in the contourf meshgrid
-YRES = 200 #must be odd so centerline can be picked later on
+XRES = 800 #number of x points in the contourf meshgrid
+YRES = 400 #must be odd so centerline can be picked later on
 
 from utilities.helpers import linear_layout,rectangular_domain
 xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,_,_ = rectangular_domain(layout,xpad=XPAD,ypad=YPAD,xr=XRES,yr=YRES)
 
-td = 0
+td = 4
 U_i,P_i,thetaD_i = np.array((U_inf,)),np.array((1,)),np.array((td,)) 
 
 from utilities.AEP3_functions import num_Fs
@@ -52,8 +52,8 @@ import matplotlib.pyplot as plt
 from utilities.plotting_funcs import set_latex_font
 set_latex_font()
 from matplotlib.gridspec import GridSpec
-gs = GridSpec(4, 1, height_ratios=[14,1,1,10],wspace=0.2,hspace=0.2)
-fig = plt.figure(figsize=(7.8,5), dpi=300) 
+gs = GridSpec(4, 1, height_ratios=[14,1,1,10],wspace=0,hspace=0.3)
+fig = plt.figure(figsize=(6,3.85), dpi=300) #(3,2.5) (7.8,5)
 ax1 = fig.add_subplot(gs[0,0])
 cax = fig.add_subplot(gs[1,0])
 ax2 = fig.add_subplot(gs[3,0])
@@ -63,8 +63,8 @@ a1 = 2
 ylims = (-a1,a1)
 
 #contourf first
-ax1.set_xlabel('$x/d_0$',labelpad=-7)
-ax1.set_ylabel('$y/d_0$',labelpad=-12)
+ax1.set_xlabel('$x/D$',labelpad=-7)
+ax1.set_ylabel('$y/D$',labelpad=-12)
 yticks = ax1.yaxis.get_major_ticks()
 yticks[1].set_visible(False)
 ax1.set(aspect='equal',xlim=xlims,ylim=ylims)
@@ -79,6 +79,10 @@ ax1.scatter(layout[:,0],layout[:,1],marker ='x',color='black')
 for i in range(NT): #label each turbine
     an_text = str(i+1)
     ax1.annotate(an_text, xy=(xt[i],yt[i]-.3), ha='center', va='top',color='black',fontsize=6)
+
+props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.1)
+ax1.annotate(f"$\\theta_{{WB}}={270+td}^{{o}}$", xy=(0.01,0.95), ha='left', va='top',color='black',xycoords='axes fraction',rotation='horizontal',bbox=props)
+
 
 #colour bar
 cb = fig.colorbar(cf, cax=cax, cmap=cmap1,orientation='horizontal',format='%.3g')

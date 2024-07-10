@@ -12,7 +12,7 @@ if hasattr(sys, 'ps1'):
     %autoreload 2
 
 import numpy as np
-run = 1
+run = 0
 timed = True #timing toggle
 #should this cell run?
 SAVE_FIG = False
@@ -44,7 +44,7 @@ rndm_layout = random_layouts(1)[0]
 
 site_n = [9,1,6] #[2,3,6] [6,8,10] are also tricky 
 layout_n = [7,] # [5,6,7] update EXTENT to increase size of window if increasing this
-Nterms = np.arange(NO_BINS/2,1,-2).astype(int).tolist() #numer of Fourier terms in the truncated series #[36,]
+Nterms = np.arange(NO_BINS/2,2,-2).astype(int).tolist() #numer of Fourier terms in the truncated series #[36,]
 rot=0
 
 ROWS = len(site_n) #number of sites
@@ -166,7 +166,7 @@ import matplotlib.ticker as ticker
 from utilities.plotting_funcs import set_latex_font
 set_latex_font() #try use latex font
 
-S = 3
+S = 5
 gs = GridSpec(1, 2, wspace=0.3,hspace=0)
 fig = plt.figure(figsize=(7.8,2.5), dpi=300) #figsize=(7.8,8)
 ax1 = fig.add_subplot(gs[0,0])
@@ -176,15 +176,18 @@ ax1.xaxis.set_major_locator(ticker.FixedLocator(Nterms_arr[::2]))
 
 ax2 = fig.add_subplot(gs[0,1])
 ax2.invert_xaxis()
-ax2.set(xlabel='Fourier Terms',ylabel='Times Faster')
+ax2.set(xlabel='Fourier Terms',ylabel='Normalised Time')
 ax2.xaxis.set_major_locator(ticker.FixedLocator(Nterms_arr[::2])) 
 
-for i in range(3):
-    lbl_text = f"Case {str(i+1)}"
-    ax1.plot(Nterms,aep_d[i,j,:]/aep_d[i,j,0],marker='o',ms=S,label=lbl_text)
-    ax2.plot(Nterms,1/(time_d[i,j,:]/time_a[i,j]),marker='o',ms=S)
+wr_rank = ["1st","6th","12th"]
+marker  = ['o','x','+']
 
-fig.legend(loc='lower left')
+for i in range(3):
+    lbl_text = wr_rank[i]+" Wind Rose"
+    ax1.plot(Nterms,aep_d[i,j,:]/aep_d[i,j,0],marker=marker[i],color='grey',ms=S,label=lbl_text,mfc='black',mec='black')
+    ax2.plot(Nterms,(time_d[i,j,:]/time_d[i,j,0]),marker=marker[i],color='grey',ms=S,mec='black',mfc='black')
+
+fig.legend(loc='upper center',ncols=3)
 
 
 #%%
@@ -196,10 +199,11 @@ print(f"{pce(aep_a[i,j],aep_d[i,j,p])} was {pce(aep_a[i,j],aep_d[i,j,0])}")
 print(f"{time_a[i,j]/time_d[i,j,p]:.2f} was {time_a[i,j]/time_d[i,j,0]:.2f}")
 
 
+#%%
+from utilities.plotting_funcs import si_fm
 
-
-
-
+print(f"Nterms:{Nterms[0]} in {si_fm(time_d[1,0,0])}s")
+print(f"Nterms:{Nterms[16]} in {si_fm(time_d[1,0,16])}s")
 
 
 

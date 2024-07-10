@@ -10,17 +10,18 @@ turb = iea_10MW()
 
 NO_BINS = 72
 SAVE_FIG = False
-site_n = [2,1,8]
-site_n = list(range(1,12))
+#site_n = [2,1,8]
+site_n = list(range(1,12+1))
 U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 theta_i = np.linspace(0,2*np.pi,NO_BINS,endpoint=False)
 
 from utilities.helpers import get_floris_wind_rose
 for i in range(len(site_n)):
-    U_i[:,i],P_i[:,i],a,_ = get_floris_wind_rose(site_n[i],align_west=True)
+    U_i[:,i],P_i[:,i],a,_ = get_floris_wind_rose(site_n[i],align_west=False)
 
+#%%
 from matplotlib import rc
-rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':9})
+rc('font',**{'family':'serif','serif':['Computer Modern Roman'],'size':6})
 rc('text', usetex=True)
 #%% plot data
 
@@ -43,8 +44,56 @@ def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True,ylim=None,rlp=0):
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-gs = GridSpec(len(site_n), 5, wspace=0.1,hspace=0.1)
-fig = plt.figure(figsize=(7.8,2*len(site_n)), dpi=300)
+gs = GridSpec(len(site_n), 3, wspace=0.02,hspace=0.02)
+fig = plt.figure(figsize=(3,10), dpi=300)
+rlp = 0
+
+
+frac1 = 1.05
+lim5 = None #np.max(P_i*U_i)
+lim1 = None #np.max(P_i)
+lim2 = np.max(U_i)*frac1
+lim3 = np.max(turb.Ct_f(U_i))*frac1
+lim4 = np.max(turb.Cp_f(U_i))*frac1
+
+theta_WB_i = (3*np.pi/2) - theta_i
+
+for i in range(len(site_n)):
+    #first is wind velocity
+    nice_polar_plot(fig,gs[i,0],theta_WB_i,U_i[:,i],"$U(\\theta)$",bar=False,ylim=[None,lim2],rlp=rlp)
+    #2nd is probability
+    nice_polar_plot(fig,gs[i,1],theta_WB_i,P_i[:,i],"$P(\\theta$)",bar=False,ylim=[None,lim1],rlp=rlp)
+    #3rd is joint
+    nice_polar_plot(fig,gs[i,2],theta_WB_i,U_i[:,i]*P_i[:,i],"$P(\\theta)U(\\theta)$",ylim=[None,lim5],rlp=rlp)
+
+    # nice_polar_plot(fig,gs[i,3],theta_WB_i,turb.Ct_f(U_i[:,i]),"$C_t(U(\\theta))$",bar=False,ylim=[None,lim3],rlp=rlp)
+    # nice_polar_plot(fig,gs[i,4],theta_WB_i,turb.Cp_f(U_i[:,i]),"$C_p(U(\\theta))$",bar=False,ylim=[None,lim4],rlp=rlp)
+
+#%%
+
+def nice_polar_plot_p2(fig,gs,x,y,ann_txt,bar=True,ylim=None,rlp=0,site_n=None):
+    ax = fig.add_subplot(gs,projection='polar')
+    if bar:
+        ax.bar(x,y,color='grey',linewidth=1,width=2*np.pi/72)
+    else:
+        ax.plot(x,y,color='black',linewidth=1)
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    ax.set_xticklabels(['N', '', '', '', '', '', '', ''])
+    ax.xaxis.set_tick_params(pad=-5)
+    ax.set_rlabel_position(rlp)  # Move radial labels away from plotted line
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.1)
+    ax.annotate(ann_txt, xy=(0.4,0.6), ha='center', va='bottom',color='black',xycoords='axes fraction',rotation='vertical',bbox=props)
+    if site_n is not None:
+        ax.annotate("site "+str(site_n), xy=(0,0), ha='left', va='bottom',color='black',xycoords='axes fraction',rotation='horizontal',bbox=props)
+    ax.spines['polar'].set_visible(False)
+    ax.set(ylim=ylim)
+    return None
+
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+gs = GridSpec(4, 3, wspace=0.02,hspace=0.02)
+fig = plt.figure(figsize=(3,5), dpi=300)
 rlp = 0
 
 frac1 = 1.05
@@ -57,13 +106,12 @@ lim4 = np.max(turb.Cp_f(U_i))*frac1
 theta_WB_i = (3*np.pi/2) - theta_i
 
 for i in range(len(site_n)):
-    
-    nice_polar_plot(fig,gs[i,0],theta_WB_i,U_i[:,i]*P_i[:,i],"$P(\\theta)U(\\theta)$",ylim=[None,lim5],rlp=rlp)
-    nice_polar_plot(fig,gs[i,1],theta_WB_i,P_i[:,i],"$P(\\theta$)",bar=False,ylim=[None,lim1],rlp=rlp)
-    nice_polar_plot(fig,gs[i,2],theta_WB_i,U_i[:,i],"$U(\\theta)$",bar=False,ylim=[None,lim2],rlp=rlp)
-    nice_polar_plot(fig,gs[i,3],theta_WB_i,turb.Ct_f(U_i[:,i]),"$C_t(U(\\theta))$",bar=False,ylim=[None,lim3],rlp=rlp)
-    nice_polar_plot(fig,gs[i,4],theta_WB_i,turb.Cp_f(U_i[:,i]),"$C_p(U(\\theta))$",bar=False,ylim=[None,lim4],rlp=rlp)
+    nice_polar_plot_p2(fig,gs[i],theta_WB_i,U_i[:,i]*P_i[:,i],"$f_i U_{0,i}$",ylim=[None,lim5],rlp=rlp,site_n=i+1)
 
+    # nice_polar_plot(fig,gs[i,3],theta_WB_i,turb.Ct_f(U_i[:,i]),"$C_t(U(\\theta))$",bar=False,ylim=[None,lim3],rlp=rlp)
+    # nice_polar_plot(fig,gs[i,4],theta_WB_i,turb.Cp_f(U_i[:,i]),"$C_p(U(\\theta))$",bar=False,ylim=[None,lim4],rlp=rlp)
+
+#%%
 if SAVE_FIG:
     from pathlib import Path
 

@@ -111,8 +111,6 @@ print(f'GFLOWERS: {aep2:.2f} in {si_fm(time_2)}')
 
 layout = np.array([[0,0],[3,0],[10,0]])
 
-
-
 def get_sort_index(layout,theta_i):
     #sorts turbines from furthest upwind in wind orientated frame   
 

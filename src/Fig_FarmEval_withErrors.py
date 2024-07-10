@@ -18,17 +18,17 @@ import numpy as np
 
 run = 1
 SAVE_FIG = False
-timed = False 
+timed = True 
 
 U_LIM = 3 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
 RESOLUTION = 100 #number of x/y points in contourf meshgrid
-EXTENT = 35 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
+EXTENT = 30 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
 K = 0.03 #expansion parameter for the Gaussian model
 Kj = 0.05 #expansion parameter for the Jensen model
 NO_BINS = 72 #number of bins in the wind rose
 ALIGN_WEST = False
 
-SYNTHETIC_WR = True
+SYNTHETIC_WR = False
 if SYNTHETIC_WR: 
     U_AVs = [6,10,12] # [10,10,10] [5,10,15]
     site_var = [10,10,10] # [5,5,5] [ 1, 5,20] 
@@ -219,7 +219,7 @@ for i in range(ROWS): #for each wind rose (site)
 
         print(f"{COLS*i+(j+1)}/{ROWS*COLS}\r")
 
-#%
+#%%
 #% Another ... version of the figure
 #you need to run the cell above first
 
@@ -234,7 +234,8 @@ from matplotlib.colors import LinearSegmentedColormap
 colors = ["black", "white"]
 cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
 
-def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
+import matplotlib.patches as patches
+def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True,wr_label=None):
     ax = fig.add_subplot(gs,projection='polar')
     if bar:
         ax.bar(x,y,color='grey',linewidth=1,width=2*np.pi/72)
@@ -248,35 +249,52 @@ def nice_polar_plot(fig,gs,x,y,ann_txt,bar=True):
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none',pad=0.2)
     ax.annotate(ann_txt, xy=(0.4,0.75), ha='center', va='bottom',color='black',xycoords='axes fraction',rotation='vertical',bbox=props)
     ax.spines['polar'].set_visible(False)
+    ax.annotate(wr_label, xy=(0,-0.05), ha='left', va='bottom',color='black',xycoords='axes fraction',rotation='horizontal',bbox=props)
+
     return None
 
-def nice_composite_plot_v03B(fig,cf_gs,cb_gs,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None),cb_label=False):
+from matplotlib import cm
+def nice_composite_plot_v03B(fig,cf_gs,ff_cb_gs,e_cb_gs,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,None),ff_cb_label=False,e_cb_label=False):
     ax = fig.add_subplot(cf_gs)
 
     xticks = ax.xaxis.get_major_ticks()
     xticks[2].set_visible(False)
-    ax.set_xlabel('$x/d_0$',labelpad=-9)
+    ax.set_xlabel('$x/D$',labelpad=-9)
 
     yticks = ax.yaxis.get_major_ticks()
     yticks[2].set_visible(False)
-    ax.set_ylabel('$y/d_0$',labelpad=-19)
+    ax.set_ylabel('$y/D$',labelpad=-19)
     ax.yaxis.set_tick_params(pad=0)
+    
     #contourf
     vmin,vmax = cont_lim
-    cf = ax.contourf(X,Y,Z1,50,cmap=cmap1,vmin=vmin,vmax=vmax)
-    #scatter plot
-    color_list = plt.cm.viridis(np.linspace(1, 0, 8))
-    from matplotlib.colors import ListedColormap
-    cmap = ListedColormap(color_list)
-    sp = ax.scatter(xt,yt,c=Z2,cmap=cmap,marker='x',s=10)
-    #sp = ax.scatter(xt,yt,marker='x',s=10,c='black')
-    cax = fig.add_subplot(cb_gs)
-    cb = fig.colorbar(sp, cax=cax, cmap=cmap,orientation='horizontal',format='%.3g') #the per turbine colourbar
+    cf = ax.contourf(X,Y,Z1,50,cmap=cm.gray)
+
+    #greyscale velocity colourbar
+    ff_cb_ax = fig.add_subplot(ff_cb_gs)
+    ff_cb = fig.colorbar(cf, cax=ff_cb_ax, cmap=cm.gray,orientation='horizontal',format='%.3g')
     from matplotlib.ticker import MaxNLocator
-    cb.ax.xaxis.set_major_locator(MaxNLocator(5))
-    if cb_label:
-        cb.set_label("Per-turbine error in AEP / \%")
+    ff_cb.ax.xaxis.set_major_locator(MaxNLocator(5))
+    if ff_cb_label:
+        ff_cb.set_label("Average wind velocity / $ms^{-1}$")
     ax.set(xlim=(-EXTENT, EXTENT), ylim=(-EXTENT, EXTENT))
+
+    #coloured scatter plot at turbine locations
+    sp = ax.scatter(xt,yt,c=Z2,cmap=cm.viridis,marker='o',s=3,lw=1)
+    e_cb_ax = fig.add_subplot(e_cb_gs)
+
+    #scatter plot colourbar
+    e_cb = fig.colorbar(sp, cax=e_cb_ax, cmap=cm.viridis,orientation='horizontal',format='%.3g') #the per turbine colourbar
+    from matplotlib.ticker import MaxNLocator
+    e_cb.ax.xaxis.set_major_locator(MaxNLocator(5))
+    if e_cb_label:
+        e_cb.set_label("Per-turbine error in AEP / \%")
+    ax.set(xlim=(-EXTENT, EXTENT), ylim=(-EXTENT, EXTENT))
+
+    # # snippet to find scale turbine marker size
+    # circle = patches.Circle((-3.4850758,9.25362872), 0.5, color='blue', alpha=0.5)
+    # ax.add_patch(circle)
+    # ax.grid(True)
 
     return cf
 
@@ -298,38 +316,42 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 wspace = 0.2
-gs = GridSpec(12, 4, height_ratios=[14,14,1,1,1,1,1,1,1,12,12,12],wspace=0.2,hspace=0.15)
-fig = plt.figure(figsize=(7.8,8.9), dpi=300) #figsize=(7.8,8)
+gs = GridSpec(12, 4, height_ratios=[14,14,1,1,1,1,1,1,1,8,8,8],wspace=0.2,hspace=0.15)
+fig = plt.figure(figsize=(7.8,7.6), dpi=300) #figsize=(7.8,8)
 
 cont_lim = (np.min(Uwff),np.max(Uwff))
 
 dc = 0 #data column
+wr_rank = ["1st","6th","12th"]
 #this iterates over the columns first then the rows 
 for i in range(3): #for each COLUMN
     #first row is the wind roses
     y1 = U_i[:,i]*P_i[:,i]
-    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$")
+    wr_label ="Site " + str(site_var[i])
+    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$",wr_label=wr_label)
     #next is the contourf
     Z2 = pce(powj_a[i][dc], powj_d[i][dc])
     xt,yt = layout[i][dc][:,0],layout[i][dc][:,1]
     if i == 1:
-        cb_label = True
+        e_cb_label = True
+        ff_cb_label = True
     else:
-        cb_label = False
-    cf = nice_composite_plot_v03B(fig,gs[1,i+1],gs[3,i+1],Uwff[i][dc].reshape(X.shape),X,Y,Z2,xt,yt,errors,cont_lim=cont_lim,cb_label=cb_label)
+        e_cb_label = False
+        ff_cb_label = False
+    cf = nice_composite_plot_v03B(fig,gs[1,i+1],gs[3,i+1],gs[7,i+1],Uwff[i][dc].reshape(X.shape),X,Y,Z2,xt,yt,errors,cont_lim=cont_lim,ff_cb_label=ff_cb_label,e_cb_label=e_cb_label)
     
-ill_cb(gs[7,1:],cont_lim) #'illustrative' colourbar on bottom row
+#ill_cb(gs[7,1:],cont_lim) #'illustrative' colourbar on bottom row
 
 aep_a,aep_b,aep_c,aep_d,aep_g = [np.zeros((ROWS,COLS)) for _ in range(5)]
 for i in range(ROWS):
     for j in range(COLS):
         aep_a[i,j] = np.sum(powj_a[i][j])
-        aep_b[i,j] = np.sum(powj_b[i][j])
-        aep_c[i,j] = np.sum(powj_c[i][j])
+        # aep_b[i,j] = np.sum(powj_b[i][j])
+        # aep_c[i,j] = np.sum(powj_c[i][j])
         aep_d[i,j] = np.sum(powj_d[i][j])
         aep_g[i,j] = np.sum(powj_g[i][j])
-
-aep_arr = np.dstack([aep_a, aep_b,aep_c,aep_d,aep_g])
+#aep_arr = np.dstack([aep_a, aep_b,aep_c,aep_d,aep_g])
+aep_arr = np.dstack([aep_a, aep_d,aep_g])
 
 list_x = [1.2,1.2,1.2,1]
 colWidths =  [_/4.6 for _ in list_x]
@@ -337,7 +359,8 @@ colWidths =  [_/4.6 for _ in list_x]
 #AEP table
 aep_table_ax = fig.add_subplot(gs[9,:])
 aep_table_ax.axis('off')
-hdr_list = ['CumulativeCurl','Numerical Integration','Vect Num Integration','GaussianFLOWERS','JensenFLOWERS']
+# hdr_list = ['CumulativeCurl','Numerical Integration','Vect Num Integration','GaussianFLOWERS','JensenFLOWERS']
+hdr_list = ['CumulativeCurl','GaussianFLOWERS','JensenFLOWERS']
 aep_row_txt = []
 aep_table_text = [['\\textbf{AEP}','','','']]
 for i in range(len(hdr_list)): #for each row
@@ -350,12 +373,12 @@ for i in range(len(hdr_list)): #for each row
 
 aep_table_ax.table(cellText=aep_table_text, loc='center',colWidths=colWidths,cellLoc='left',edges='open')
 
-time_arr = np.dstack([time_a,time_b,time_c,time_d,time_g])
+#time_arr = np.dstack([time_a,time_b,time_c,time_d,time_g])
+time_arr = np.dstack([time_a,time_d,time_g])
 
 #performance table
 prf_table_ax = fig.add_subplot(gs[10,:])
 prf_table_ax.axis('off')
-hdr_list = ['CumulativeCurl','Numerical Integration','Vect Num Integration','GaussianFLOWERS','JensenFLOWERS']
 prf_row_hdr = []
 prf_table_text = [['\\textbf{Performance}','','','']]
 for i in range(len(hdr_list)): #for each row
@@ -398,6 +421,18 @@ if SAVE_FIG:
     print(f"figure saved as {fig_name}")
     print(f"to {path_plus_name}")
 
+#%% what about with the turbine rotors to scale!
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(3,3),dpi=200)
+ax.set(aspect='equal')
+i=2
+Z1 = Uwff[i][dc].reshape(X.shape)
+Z2 = pce(powj_a[i][dc], powj_d[i][dc])
+xt,yt = layout[i][dc][:,0],layout[i][dc][:,1]
+cf = ax.contourf(X,Y,Z1**3,50,cmap=cm.gray)
+sp = ax.scatter(xt,yt,c=Z2,cmap=cm.viridis,marker='2',s=20,lw=0.7)
+ax.set(xlim=(-25,25),ylim=(-25,25),xlabel='$x/D$',ylabel='$y/D$')
+
 
 #%% "meta" infomration about the wind roses used
 idx = 1
@@ -411,6 +446,22 @@ fig,ax = plt.subplots(figsize=(5,5),dpi=200)
 n = np.arange(1,72+1,1)
 ax.plot(n,u)
 ax.plot(n,p)
+
+#%% qualitive discussion
+si = 2
+
+powj = np.array(powj_a[si])
+mean_aep = np.mean(powj)
+
+lay = np.array(layout[si])[0,:,:]
+
+import matplotlib.pyplot as plt
+fig,ax = plt.subplots(figsize=(5,5),dpi=200)
+ax.set(aspect='equal')
+sc = ax.scatter(lay[:,0],lay[:,1],c=powj/mean_aep)
+fig.colorbar(sc)
+
+print(f"pc diff:{100*(np.max(powj)-np.min(powj))/np.min(powj)}")
 
 
 
@@ -472,11 +523,11 @@ def nice_composite_plot_v03(fig,gs,i,j,Z1,X,Y,Z2,xt,yt,errors,cont_lim=(None,Non
 
     xticks = ax.xaxis.get_major_ticks()
     xticks[2].set_visible(False)
-    ax.set_xlabel('$x/d_0$',labelpad=-9)
+    ax.set_xlabel('$x/D$',labelpad=-9)
 
     yticks = ax.yaxis.get_major_ticks()
     yticks[2].set_visible(False)
-    ax.set_ylabel('$y/d_0$',labelpad=-19)
+    ax.set_ylabel('$y/D$',labelpad=-19)
     #contourf
     vmin,vmax = cont_lim
     cf = ax.contourf(X,Y,Z1,50,cmap=cmap1,vmin=vmin,vmax=vmax)
@@ -600,3 +651,10 @@ import matplotlib.pyplot as plt
 fig,ax = plt.subplots(figsize=(5,5),dpi=200)
 ax.plot(xs,y1)
 ax.plot(xs,y2)
+
+#%%
+import matplotlib.pyplot as plt
+from matplotlib import cm
+fig,ax = plt.subplots(figsize=(10,10),dpi=200)
+cf = ax.contourf(example,example,example,50,cmap=cm.coolwarm)
+fig.colorbar(cf)
