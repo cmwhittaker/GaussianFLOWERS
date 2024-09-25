@@ -1,5 +1,15 @@
 #%% validating num_F
 
+import sys
+import os
+sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
+import sys
+if hasattr(sys, 'ps1'):
+    #if it's interactive, re-import modules every run
+    %load_ext autoreload
+    %autoreload 2
+
+
 # check the wake "flow field" using contourf
 # (theta is theta' NOT a wind bearing )
 import numpy as np
@@ -47,15 +57,6 @@ fig.colorbar(cf)
 #         x
 # 
 #        x
-
-import sys
-import os
-sys.path.append(os.path.join('..', 'src')) #allow to import from utilities (there may be a better way ...)
-import sys
-if hasattr(sys, 'ps1'):
-    #if it's interactive, re-import modules every run
-    %load_ext autoreload
-    %autoreload 2
 
 alpha = ((0.5*1.225*turb.A)/(1*10**6)) #turbine cnst
 U_WB_i = np.array((15,13,))

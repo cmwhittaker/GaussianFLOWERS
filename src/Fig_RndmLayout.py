@@ -22,14 +22,14 @@ NO_BINS = 72 #number of bins in the wind rose
 ALIGN_WEST = True
 SYNTHETIC_WR = False
 
-site_var = [1,2,3,4,5,6,7,8,9,10,11,12] # [2,1,8]:[30,40,25] 
+site_var = [4,5,6] # [1,2,3,4,5,6,7,8,9,10,11,12] # [2,1,8]:[30,40,25] 
 
 # from utilities.helpers import random_layouts
 # NO_LAYOUTS = 4
 # np.random.seed(1)
 # layouts = random_layouts(NO_LAYOUTS)
 
-layouts = np.load('rdm_layouts.npy', allow_pickle=True)
+layouts = np.load('rdm_layouts.npy', allow_pickle=True)[0:3]
 NO_LAYOUTS = len(layouts)
 
 ROWS = len(site_var) #number of sites
@@ -217,7 +217,7 @@ for i in range(ROWS):
 aep_arr_n = aep_arr/aep_arr[0,:,:] #normalise by cumCurl
 aep_arr_n = aep_arr_n.reshape(5,ROWS*COLS)
 n_turb_arr = n_turb_arr.reshape(ROWS*COLS)
-mean_ws_arr = mean_ws_arr.reshape(ROWS*COLS)
+#mean_ws_arr = mean_ws_arr.reshape(ROWS*COLS)
 mnn_arr = mnn_arr.reshape(ROWS*COLS)
 
 #%% boxplot of normalised AEP
@@ -355,3 +355,8 @@ import matplotlib.pyplot as plt
 fig,ax = plt.subplots(figsize=(5,3),dpi=200)
 ax.hist(n_turbs)
 
+#%%
+b = []
+for j in range(3):
+    for i in range(3):
+        b.append(8.760*np.sum(powj_g[i][j]))

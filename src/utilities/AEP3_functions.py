@@ -9,6 +9,9 @@ from .flowers_interface import FlowersInterface
 def floris_FULL_timed_aep(fl_wr, layout, turb, wake=True, timed=True):
     """ 
     calculates the aep of a wind farm subject to directions theta_i Settings are taken from the "floris_settings.yaml". 
+
+    *MULTIPLE wind velocity bins are used per direction*
+
     The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
 
     Args:
@@ -49,6 +52,9 @@ def floris_FULL_timed_aep(fl_wr, layout, turb, wake=True, timed=True):
 def floris_AV_timed_aep(U_i, P_i, thetaD_i, layout, turb, wake=True, timed=True):
     """ 
     calculates the aep of a wind farm subject to directions theta_i with average bin velocity U_i and probability P_i. Settings are taken from the "floris_settings.yaml". 
+
+    *A SINGLE, average, wind velocity bins is used per direction*
+
     The execution time is measured by the adaptive_timeit function (5 repeats over ~1.5 seconds) - this shouldn't effect the aep result.
 
     Args:
@@ -291,7 +297,7 @@ def num_Fs(U_i,P_i,theta_i,
         sort_index = np.argsort(layout_r[:,0]) #sort index, with furthest upwind (x_n < x_{n+1}) first
         return sort_index
     
-    def soat(a): #Sum over Axis Two (superposistion axis sum)
+    def soat(a): #Sum over Axis Two (the wake superposistion axis)
         return np.sum(a,axis=2)
 
     x_n,y_n = layout[:,0],layout[:,1]
@@ -359,7 +365,7 @@ def num_Fs(U_i,P_i,theta_i,
         pow_j = 0.5*turb.A*RHO*wav_Cp*np.sum(P_i[:,None]*(Uwt_ij**3),axis=0)/(1*10**6)
     elif Cp_op == 4: #Gaussian equivlent of Jensen FLOWERS method (as found in the final year project)
         if Ct_op != 3:
-            raise ValueError("This has no analyical equivalent Ct_op should probably be 3")
+            raise ValueError("This has no analyical equivalent. Ct_op should probably be 3")
         alpha = np.sum(P_i[:,None]*Uwt_ij,axis=0) #the weight average velocity field
         pow_j = 0.5*turb.A*RHO*turb.Cp_f(alpha)*alpha**3/(1*10**6)
     elif Cp_op == 5: 
@@ -487,7 +493,7 @@ def ntag_PA(Fourier_coeffs3_PA,
     lim = (np.sqrt(wav_Ct/8)-EP)/K
     lim = np.where(lim<u_lim,u_lim,lim) #pick greater from u_lim and lim
 
-    #if turbine 1 is posistioned adjacent to turbine 2, neither upwind or downwind (""inline with each other, perpendicular to the wind direction"")", if within the r limit, turbine 1 will be waked by turbine 2 - which is not realistic (or atleast not as described by Bastankah 2014)
+    #if turbine 1 is posistioned adjacent to turbine 2, neither upwind or downwind (""inline with each other, perpendicular to the wind direction""), if within the r limit, turbine 1 will be waked by turbine 2 - which is not realistic (or atleast not as described by Bastankah 2014)
     sqrt_term = np.where(r_jk<lim,0,(1-np.sqrt(1-(wav_Ct/(8*(K*r_jk+EP)**2))))) 
     
     #modify some dimensions ready for broadcasting
