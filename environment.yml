@@ -1,4 +1,4 @@
-name: Windy4
+name: Windy
 channels:
   - conda-forge
   - defaults

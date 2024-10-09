@@ -136,7 +136,7 @@ def trans_bearing_to_polar(U_WB_i,P_WB_i,theta_WB_i):
     return U_i,P_i,theta_i
 
 from floris.tools import WindRose
-def get_floris_wind_rose(site_n,align_west=False,**kwargs):
+def get_floris_wind_rose(site_n,align_west=False,n_bins=72,**kwargs):
     #use floris to parse wind rose toolkit site data
     #(each site has its own folder)
     from pathlib import Path

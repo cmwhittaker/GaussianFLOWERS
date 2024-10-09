@@ -12,12 +12,14 @@ if hasattr(sys, 'ps1'):
     %autoreload 2
 
 import numpy as np
-run = 0
+run = 1
 timed = True #timing toggle
 #should this cell run?
 SAVE_FIG = False
 if not run:
-    raise ValueError('This cell takes a long time to run - are you sure you meant to run this cell?')
+    response = input('This cell takes a long time to run - are you sure you meant to run this cell? Press any key to continue or type "n" to cancel: ')
+    if response.lower() == 'n':
+        raise ValueError('Execution cancelled by the user.')
 
 SPACING = 7 #turbine spacing normalised by rotor DIAMETER
 U_LIM = 3 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 

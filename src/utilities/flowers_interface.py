@@ -7,7 +7,6 @@ written by Michael LoCascio
 
 import numpy as np
 import pandas as pd
-import flowers.tools as tl
 
 class FlowersInterface():
     """
