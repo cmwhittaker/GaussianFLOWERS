@@ -3,6 +3,9 @@
 # this "with errors" version adds an additional panel in the bottom left that shows
 # the contribution of each of the assumptions on the final accuracy (assuming that they are independent - which is semi-true)
 
+# Note the PADDING in import matplotlib.table has been changed from the hard-coded 0.1 to 0
+# 
+
 #(rows: effect of changes to the wind rose
 #colums: effect of increasing the size of the farm)
 
@@ -16,21 +19,21 @@ if hasattr(sys, 'ps1'):
 
 import numpy as np
 
-run = 1
+run = 0
 SAVE_FIG = False
-timed = True 
+timed = False 
 
 U_LIM = 3 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
 RESOLUTION = 100 #number of x/y points in contourf meshgrid
 EXTENT = 30 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
 K = 0.03 #expansion parameter for the Gaussian model
 Kj = 0.05 #expansion parameter for the Jensen model
-NO_BINS = 72 #number of bins in the wind rose
+NO_BINS = 360 #number of bins in the wind rose
 ALIGN_WEST = False
 
-SYNTHETIC_WR = False
+SYNTHETIC_WR = True
 if SYNTHETIC_WR: 
-    U_AVs = [6,10,12] # [10,10,10] [5,10,15]
+    U_AVs = [10,10,10] # [6,10,12] [10,10,10] [5,10,15]
     site_var = [10,10,10] # [5,5,5] [ 1, 5,20] 
     #site_var is the kappa concentration parameter
 else:
@@ -41,27 +44,33 @@ turb_n = [5,7,9] # [7,7,7] [5,7,9]
 spacing = [7,7,7]  #[7,7,7] [9,7,5] 
 
 from utilities.helpers import random_layouts
-np.random.seed(1)
-lay_sample = [random_layouts(1)[0],]
-layouts = lay_sample*3
-# layout = []
-# widths = [30,42,54] #[54,42,30] 
-# min_rs = [5.1,5.1,5.1] #[6.7,5.1,3.7] 
-# for i in range(3):
-#     layouts.append(random_layouts(1,width=widths[i],min_r=min_rs[i])[0])
+CONSTANT_LAYOUT = False
+if CONSTANT_LAYOUT:
+    np.random.seed(1)
+    lay_sample = [random_layouts(1)[0],]
+    layouts = lay_sample*3
+else:
+    np.random.seed(1)
+    layouts = []
+    widths = [54,42,30]  # [30,42,54] [54,42,30] 
+    min_rs = [6.7,5.1,3.7]  # [5.1,5.1,5.1] [6.7,5.1,3.7] 
+    for i in range(3):
+        layouts.append(random_layouts(1,width=widths[i],min_r=min_rs[i])[0])
 
 rot = [45,45,45] #optimal rotation
 
 ROWS = len(site_var) #number of sites
 COLS = 1 #number of layout variations
 
-if not run: #I used ipy and don't want to fat finger and wait 20 min for it to run again
-    raise ValueError('This cell takes a long time to run - are you sure you meant to run this cell?')
+if not run:
+    response = input('This cell takes a long time to run - are you sure you meant to run this cell? Press any key to continue or type "n" to cancel: ')
+    if response.lower() == 'n':
+        raise ValueError('Execution cancelled by the user.')
 
 def find_errors(U_i,P_i,theta_i,plot_points,layout,turb,K):
     # this finds the errors resulting from each of the assumptions, they are:
     # 1. Ct_error: Approximating Ct(U_w) (local) with a constant \overline{C_t}
-    # 2. Cp_error1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
+    # 2. Cp_erro1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
     # 3. Cx1_error: Cros terms approximation Approximating ( \sum x )^n with ( \sum x^n )
     # 4. SA_error: small angle approximation of the Gaussian wake model (sin(\theta) \approx \theta etc...)    
 
@@ -80,12 +89,12 @@ def find_errors(U_i,P_i,theta_i,plot_points,layout,turb,K):
                      cross_ts=cross_ts,ex=ex,cube_term=cube_term)
         return np.sum(pow_j)
     exact = simple_aep() #the default options represent no assumptions takene
+    Cp_error = pce(exact,simple_aep(Cp_op=2)) #Cp_op 2 is a global Cp
     Ct_error = pce(exact,simple_aep(Ct_op=3)) #Ct_op 3 is a constant Ct
-    Cp_error1 = pce(exact,simple_aep(Cp_op=2)) #Cp_op 2 is a global Cp
     Cx1_error = pce(exact,simple_aep(cross_ts=False)) #neglect cross terms
     SA_error = pce(exact,simple_aep(ex=False)) #ex:"exact" =False so use small angle approximation
     
-    return (Ct_error,Cp_error1,Cx1_error,SA_error)
+    return (Cp_error,Ct_error,Cx1_error,SA_error)
 
 import warnings
 # Suppress spammy runtime warnings
@@ -116,9 +125,9 @@ from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_
 for i in range(ROWS): #for each wind rose (site)
     #get wind rose (NOT sorted using wind bearing)
     if SYNTHETIC_WR:
-        U_i[:,i],P_i[:,i],_ = vonMises_wr(U_AVs[i],site_var[i])
+        U_i[:,i],P_i[:,i],_ = vonMises_wr(U_AVs[i],site_var[i],NO_BINS=NO_BINS)
     else:
-        U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_var[i],align_west=ALIGN_WEST)
+        U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_var[i],align_west=ALIGN_WEST,n_bins=NO_BINS)
 
     #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
     _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
@@ -316,8 +325,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 wspace = 0.2
-gs = GridSpec(12, 4, height_ratios=[14,14,1,1,1,1,1,1,1,8,8,8],wspace=0.2,hspace=0.15)
-fig = plt.figure(figsize=(7.8,7.6), dpi=300) #figsize=(7.8,8)
+gs = GridSpec(13, 4, height_ratios=[14,14,1,1,1,1,1,1,1,1,8,8,8],wspace=0.2,hspace=0.15)
+fig = plt.figure(figsize=(7.8,7.8), dpi=300) #figsize=(7.8,8)
 
 cont_lim = (np.min(Uwff),np.max(Uwff))
 
@@ -328,7 +337,7 @@ for i in range(3): #for each COLUMN
     #first row is the wind roses
     y1 = U_i[:,i]*P_i[:,i]
     wr_label ="Site " + str(site_var[i])
-    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$P(\\theta)U(\\theta)$",wr_label=wr_label)
+    nice_polar_plot(fig,gs[0,i+1],np.deg2rad(thetaD_WB_i),y1,"$f_i U_{0,i}$",wr_label=wr_label)
     #next is the contourf
     Z2 = pce(powj_a[i][dc], powj_d[i][dc])
     xt,yt = layout[i][dc][:,0],layout[i][dc][:,1]
@@ -357,7 +366,7 @@ list_x = [1.2,1.2,1.2,1]
 colWidths =  [_/4.6 for _ in list_x]
 
 #AEP table
-aep_table_ax = fig.add_subplot(gs[9,:])
+aep_table_ax = fig.add_subplot(gs[10,:])
 aep_table_ax.axis('off')
 # hdr_list = ['CumulativeCurl','Numerical Integration','Vect Num Integration','GaussianFLOWERS','JensenFLOWERS']
 hdr_list = ['CumulativeCurl','GaussianFLOWERS','JensenFLOWERS']
@@ -376,25 +385,26 @@ aep_table_ax.table(cellText=aep_table_text, loc='center',colWidths=colWidths,cel
 #time_arr = np.dstack([time_a,time_b,time_c,time_d,time_g])
 time_arr = np.dstack([time_a,time_d,time_g])
 
-#performance table
-prf_table_ax = fig.add_subplot(gs[10,:])
-prf_table_ax.axis('off')
-prf_row_hdr = []
-prf_table_text = [['\\textbf{Performance}','','','']]
-for i in range(len(hdr_list)): #for each row
-    prf_row_hdr.append(hdr_list[i]) #first is the name
-    for j in range(ROWS): #next 3 are data
-        prf_row_hdr.append(f'{si_fm(time_arr[j,dc,i])}s ({time_arr[j,dc,0]/time_arr[j,dc,i]:.1f})')
+# #performance table
+# prf_table_ax = fig.add_subplot(gs[11,:])
+# prf_table_ax.axis('off')
+# prf_row_hdr = []
+# prf_table_text = [['\\textbf{Performance}','','','']]
+# for i in range(len(hdr_list)): #for each row
+#     prf_row_hdr.append(hdr_list[i]) #first is the name
+#     for j in range(ROWS): #next 3 are data
+#         prf_row_hdr.append(f'{si_fm(time_arr[j,dc,i])}s ({time_arr[j,dc,0]/time_arr[j,dc,i]:.1f})')
                     
-    prf_table_text.append(prf_row_hdr)
-    prf_row_hdr = [] #clear row    
-prf_table_ax.table(cellText=prf_table_text, loc='center',colWidths=colWidths,cellLoc='left',edges='open')
+#     prf_table_text.append(prf_row_hdr)
+#     prf_row_hdr = [] #clear row    
+# prf_table_ax.table(cellText=prf_table_text, loc='center',colWidths=colWidths,cellLoc='left',edges='open')
 
 #Error contibution table
 err_table_ax = fig.add_subplot(gs[11,:])
 err_table_ax.axis('off')
 #hdr_list = ['Thrust Coeff','Power Coeff','Cross Terms','Small Angle']
-hdr_list = ['$C_t(U_w)\\approx \\overline{{C_t}}$','$C_p(U_w)\\approx C_p(U_\\infty)$','$(\sum x)^N \\approx \sum (x^N)$','Sml Angle','Total']
+hdr_list = ['S1: $C_p(U_w)\\approx C_p(U_\\infty)$','S2: $C_p(U_w)\\approx C_p(U_\\infty)$','S4: $(\sum x)^N \\approx \sum (x^N)$','S5: Sml Angle','Total']
+#['$C_t(U_w)\\approx \\overline{{C_t}}$','$C_p(U_w)\\approx C_p(U_\\infty)$','$(\sum x)^N \\approx \sum (x^N)$','Sml Angle','Total']
 err_row_hdr = []
 err_table_text = [['\\textbf{Error Contributions}','','','']]
 for i in range(4): #for each row
@@ -605,7 +615,7 @@ cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
 for i in range(ROWS): 
     #first column is the wind rose
     y1 = U_i[:,i]*P_i[:,i]
-    nice_polar_plot(fig,gs[2*i,0],np.deg2rad(thetaD_i),y1,"$P(\\theta)U(\\theta)$")
+    nice_polar_plot(fig,gs[2*i,0],np.deg2rad(thetaD_i),y1,"$f_i U_{0,i}$")
     for j in range(COLS): #then onto the contours
         Z2 = pce(powj_a[i][j], powj_d[i][j])
         xt,yt = layout[i][j][:,0],layout[i][j][:,1]

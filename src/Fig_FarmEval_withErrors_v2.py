@@ -28,12 +28,12 @@ RESOLUTION = 100 #number of x/y points in contourf meshgrid
 EXTENT = 35 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
 K = 0.03 #expansion parameter for the Gaussian model
 Kj = 0.05 #expansion parameter for the Jensen model
-NO_BINS = 72 #number of bins in the wind rose
+NO_BINS = 360 #number of bins in the wind rose
 ALIGN_WEST = False
 
 SYNTHETIC_WR = True #(they are all synthetic)
 
-FIG_VAR = 3 #Figure variation
+FIG_VAR = 2 #Figure variation
 from utilities.helpers import random_layouts
 np.random.seed(1)
 if FIG_VAR==1: #varying inflow velocities
@@ -78,7 +78,7 @@ if not run: #I used ipy and don't want to fat finger and wait 20 min for it to r
 def find_errors(U_i,P_i,theta_i,plot_points,layout,turb,K):
     # this finds the errors resulting from each of the assumptions, they are:
     # 1. Ct_error: Approximating Ct(U_w) (local) with a constant \overline{C_t}
-    # 2. Cp_error1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
+    # 2. Cp_erro1: Approximating Cp(U_w) (local) with Cp(U_\infty) (global)
     # 3. Cx1_error: Cros terms approximation Approximating ( \sum x )^n with ( \sum x^n )
     # 4. SA_error: small angle approximation of the Gaussian wake model (sin(\theta) \approx \theta etc...)    
 
@@ -97,12 +97,12 @@ def find_errors(U_i,P_i,theta_i,plot_points,layout,turb,K):
                      cross_ts=cross_ts,ex=ex,cube_term=cube_term)
         return np.sum(pow_j)
     exact = simple_aep() #the default options represent no assumptions takene
+    Cp_error = pce(exact,simple_aep(Cp_op=2)) #Cp_op 2 is a global Cp
     Ct_error = pce(exact,simple_aep(Ct_op=3)) #Ct_op 3 is a constant Ct
-    Cp_error1 = pce(exact,simple_aep(Cp_op=2)) #Cp_op 2 is a global Cp
     Cx1_error = pce(exact,simple_aep(cross_ts=False)) #neglect cross terms
     SA_error = pce(exact,simple_aep(ex=False)) #ex:"exact" =False so use small angle approximation
     
-    return (Ct_error,Cp_error1,Cx1_error,SA_error)
+    return (Cp_error,Ct_error,Cx1_error,SA_error)
 
 import warnings
 # Suppress spammy runtime warnings
@@ -128,14 +128,14 @@ U_i,P_i = [np.zeros((NO_BINS,len(site_var))) for _ in range(2)]
 
 errors = np.zeros((ROWS,COLS,4))
 
-from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,floris_FULL_timed_aep,jflowers
+from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,floris_FULL_timed_aep, jflowers
 
 for i in range(ROWS): #for each wind rose (site)
     #get wind rose (NOT sorted using wind bearing)
     if SYNTHETIC_WR:
-        U_i[:,i],P_i[:,i],_ = vonMises_wr(U_AVs[i],site_var[i])
+        U_i[:,i],P_i[:,i],_ = vonMises_wr(U_AVs[i],site_var[i],NO_BINS=NO_BINS)
     else:
-        U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_var[i],align_west=ALIGN_WEST)
+        U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_var[i],align_west=ALIGN_WEST,n_bins=NO_BINS)
 
     #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
     _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
@@ -422,7 +422,7 @@ time_arr = np.dstack([time_b,time_d,time_g])
 err_table_ax = fig.add_subplot(gs[10,:])
 err_table_ax.axis('off')
 #hdr_list = ['Thrust Coeff','Power Coeff','Cross Terms','Small Angle']
-hdr_list = ['$C_t(U_w)\\approx \\overline{{C_t}}$','$C_p(U_w)\\approx C_p(U_\\infty)$','$(\sum x)^N \\approx \sum (x^N)$','Sml Angle','Total']
+hdr_list = ['S1: $C_p(U_w)\\approx C_p(U_\\infty)$','S2: $C_p(U_w)\\approx C_p(U_\\infty)$','S4: $(\sum x)^N \\approx \sum (x^N)$','S5: Sml Angle','Total']
 err_row_hdr = []
 err_table_text = [['\\textbf{Error Contributions}','','','']]
 for i in range(4): #for each row

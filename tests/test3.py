@@ -29,12 +29,7 @@ wav_ep = 0.2*np.sqrt((1+np.sqrt(1-wav_Ct))/(2*np.sqrt(1-wav_Ct)))
 
 #first, start with a simple implementation 
 
-
-
-
-
-          # some simple calcs here
-
+# some simple calcs here
 
 #Next check num_Fs is giving the same result
 layout = np.array(((-3,0),(0,0),(-0.2,-3),(-0.4,-6)))

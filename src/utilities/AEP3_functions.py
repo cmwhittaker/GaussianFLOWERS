@@ -507,8 +507,10 @@ def ntag_PA(Fourier_coeffs3_PA,
 
     def term(a):
         cnst_term = ((np.sqrt(2*np.pi*a)*sigma)/(a))*(sqrt_term**a)
-        mfs = (np.sum(np.exp(-((sigma_b*n_b)**2)/(2*a))*(fs),axis=-1)) #modified Fourier series
-        return np.sum(cnst_term*mfs,axis=-1)
+        thing = np.exp(-((sigma_b*n_b)**2)/(2*a))*(fs)
+        mfs = (np.sum(thing,axis=-1)) #modified Fourier series
+        sum = np.sum(cnst_term*mfs,axis=-1)
+        return sum
 
     #alpha is the 'energy' content of the wind
     alpha = (a_0/2)*2*np.pi - 3*term(1) + 3*term(2) #- term(3)

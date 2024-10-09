@@ -12,7 +12,7 @@ if hasattr(sys, 'ps1'):
     %autoreload 2
 
 import numpy as np
-run = 1
+run = 0
 timed = True #timing toggle
 #should this cell run?
 SAVE_FIG = False
@@ -27,7 +27,7 @@ RESOLUTION = 100 #number of x/y points in contourf meshgrid
 EXTENT = 30 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
 K = 0.03 #expansion parameter for the Gaussian model
 Kj = 0.05 #expansion parameter for the Jensen model
-NO_BINS = 72 #number of bins in the wind rose
+NO_BINS = 360 #number of bins in the wind rose
 ALIGN_WEST = True
 
 import warnings
@@ -44,10 +44,13 @@ from utilities.helpers import random_layouts
 np.random.seed(1)
 rndm_layout = random_layouts(1)[0]
 
-site_n = [9,1,6] #[2,3,6] [6,8,10] are also tricky 
+site_n = [9,1,6] # [9,1,6] [2,3,6] [6,8,10] are also tricky 
 layout_n = [7,] # [5,6,7] update EXTENT to increase size of window if increasing this
-Nterms = np.arange(NO_BINS/2,2,-2).astype(int).tolist() #numer of Fourier terms in the truncated series #[36,]
+Nterms = np.arange(NO_BINS/2,2,-10).astype(int).tolist() + [5,3,2,1] #numer of Fourier terms in the truncated series #[36,] +[5,]
+# Nterms =[180,1,0]
+# np.arange(NO_BINS/2,2,-2).astype(int).tolist()
 rot=0
+
 
 ROWS = len(site_n) #number of sites
 COLS = len(layout_n) #number of layout variations
@@ -71,7 +74,7 @@ U_i,P_i = [np.zeros((NO_BINS,len(site_n))) for _ in range(2)]
 from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,jflowers
 
 for i in range(ROWS): #for each wind rose (site)
-    U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_n[i],align_west=ALIGN_WEST)
+    U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_n[i],align_west=ALIGN_WEST,n_bins=NO_BINS)
     #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
     _,FULL_Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
     #jensen FLOWERS Fourier coefficients
@@ -116,11 +119,11 @@ for i in range(ROWS): #for each wind rose (site)
 
         for k in range(LAYS): #for each number of terms
             #truncate the Gaussian Flowers Fourier series
-            A_n,Phi_n = FULL_Fourier_coeffs3_PA
-            Trunc_Fourier_coeffs_PA = A_n[:Nterms[k]+1],Phi_n[:Nterms[k]+1]
+            A_n,Phi_n = FULL_Fourier_coeffs3_PA # unpack
+            Trunc_Fourier_coeffs_PA = A_n[:Nterms[k]+1],Phi_n[:Nterms[k]+1] # repack
             #truncate the Jensen FLowers Fourier series
-            a_0,a_n,b_n = FULL_Fourier_coeffs_j
-            Trunc_Fourier_coeffs_j = a_0,a_n[:Nterms[k]+1],b_n[:Nterms[k]+1]
+            a_0,a_n,b_n = FULL_Fourier_coeffs_j # unpack 
+            Trunc_Fourier_coeffs_j = a_0,a_n[:Nterms[k]+1],b_n[:Nterms[k]+1] #repack
 
             #then perform the calculations
             #ntag (No cross Terms Analytical Gaussian) (aep+time)
@@ -168,29 +171,43 @@ import matplotlib.ticker as ticker
 from utilities.plotting_funcs import set_latex_font
 set_latex_font() #try use latex font
 
+# Define the colormap
+cmap = plt.cm.viridis
+colors = [cmap(0.0), cmap(0.5), cmap(1.0)] 
+
+xmarkers = np.array([180, 160, 140, 120, 100, 80, 60, 40, 20, 1])
+
 S = 5
 gs = GridSpec(1, 2, wspace=0.3,hspace=0)
 fig = plt.figure(figsize=(7.8,2.5), dpi=300) #figsize=(7.8,8)
 ax1 = fig.add_subplot(gs[0,0])
 ax1.invert_xaxis()
 ax1.set(xlabel='Fourier Terms',ylabel='Normalised AEP',label='Error')
-ax1.xaxis.set_major_locator(ticker.FixedLocator(Nterms_arr[::2])) 
+ax1.xaxis.set_major_locator(ticker.FixedLocator(xmarkers)) 
 
 ax2 = fig.add_subplot(gs[0,1])
 ax2.invert_xaxis()
 ax2.set(xlabel='Fourier Terms',ylabel='Normalised Time')
-ax2.xaxis.set_major_locator(ticker.FixedLocator(Nterms_arr[::2])) 
+ax2.xaxis.set_major_locator(ticker.FixedLocator(xmarkers)) 
 
-wr_rank = ["1st","6th","12th"]
 marker  = ['o','x','+']
 
 for i in range(3):
-    lbl_text = wr_rank[i]+" Wind Rose"
-    ax1.plot(Nterms,aep_d[i,j,:]/aep_d[i,j,0],marker=marker[i],color='grey',ms=S,label=lbl_text,mfc='black',mec='black')
-    ax2.plot(Nterms,(time_d[i,j,:]/time_d[i,j,0]),marker=marker[i],color='grey',ms=S,mec='black',mfc='black')
+    lbl_text = "Site " + str(site_n[i])
+    ax1.plot(Nterms,aep_d[i,j,:]/aep_d[i,j,0],marker=None,color=colors[i],ms=S,label=lbl_text,mfc='black',mec='black',alpha=0.8)
+    ax2.plot(Nterms,(time_d[i,j,:]/time_d[i,j,0]),marker=None,color=colors[i],ms=S,mec='black',mfc='black',alpha=0.8)
 
 fig.legend(loc='upper center',ncols=3)
 
+#%%
+
+layout[i][j] = np.array([[0,0],[0,7]])
+s=2 #number of terms
+A_n,Phi_n = FULL_Fourier_coeffs3_PA # unpack
+Trunc_Fourier_coeffs_PA = A_n[:s],Phi_n[:s] # repack
+a,b = ntag_PA(Trunc_Fourier_coeffs_PA,layout[i][j],layout[i][j],turb,K,wav_Ct)
+
+print(np.sum(a))
 
 #%%
 from utilities.helpers import pce

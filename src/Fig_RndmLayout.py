@@ -12,24 +12,29 @@ import numpy as np
 run = 1
 SAVE_FIG = False
 timed = False 
+if not run:
+    response = input('This cell takes a long time to run - are you sure you meant to run this cell? Press any key to continue or type "n" to cancel: ')
+    if response.lower() == 'n':
+        raise ValueError('Execution cancelled by the user.')
+    
 
 U_LIM = 3 #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
 RESOLUTION = 100 #number of x/y points in contourf meshgrid
 EXTENT = 35 #total size of contourf "window" (square from -EXTENT,-EXTENT to EXTENT,EXTENT)
 K = 0.03 #expansion parameter for the Gaussian model
 Kj = 0.05 #expansion parameter for the Jensen model
-NO_BINS = 72 #number of bins in the wind rose
+NO_BINS = 360 #number of bins in the wind rose
 ALIGN_WEST = True
 SYNTHETIC_WR = False
 
-site_var = [4,5,6] # [1,2,3,4,5,6,7,8,9,10,11,12] # [2,1,8]:[30,40,25] 
+site_var = [1,2,3,4,5,6,7,8,9,10,11,12] # [1,2,3,4,5,6,7,8,9,10,11,12] # [2,1,8]:[30,40,25] 
 
 # from utilities.helpers import random_layouts
 # NO_LAYOUTS = 4
 # np.random.seed(1)
 # layouts = random_layouts(NO_LAYOUTS)
 
-layouts = np.load('rdm_layouts.npy', allow_pickle=True)[0:3]
+layouts = np.load('rdm_layouts.npy', allow_pickle=True)
 NO_LAYOUTS = len(layouts)
 
 ROWS = len(site_var) #number of sites
@@ -94,7 +99,7 @@ errors = np.zeros((ROWS,COLS,4))
 from utilities.AEP3_functions import floris_AV_timed_aep,num_Fs,vect_num_F,ntag_PA,caag_PA,floris_FULL_timed_aep,jflowers
 
 for i in range(ROWS): #for each wind rose (site)
-    U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_var[i],align_west=ALIGN_WEST)
+    U_i[:,i],P_i[:,i],_,fl_wr = get_floris_wind_rose(site_var[i],align_west=ALIGN_WEST,n_bins=NO_BINS)
     #For ntag, the fourier coeffs are found from Cp(Ui)*Pi*Ui**3
     _,Fourier_coeffs3_PA = simple_Fourier_coeffs(turb.Cp_f(U_i[:,i])*(P_i[:,i]*(U_i[:,i]**3)*len(P_i[:,i]))/(2*np.pi))
     #For caag, the fourier coeffs are found from Pi*Ui
@@ -230,8 +235,6 @@ fig,ax = plt.subplots(figsize=(3,1.5),dpi=300)
 
 boxplot = a = ax.violinplot(aep_arr_n.swapaxes(0, 1))
 
-#%%
-
 boxplot = a = ax.boxplot(aep_arr_n.swapaxes(0, 1)[:,1:5],showfliers=False,vert=False)
 median_lines = boxplot['medians']
 for line in median_lines:
@@ -266,10 +269,16 @@ for median_err in boxplot['medians']:
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MaxNLocator
+from utilities.plotting_funcs import set_latex_font
 gs = GridSpec(1,4,width_ratios=(1,1,1,0.4),wspace=0.1,hspace=0)
 fig = plt.figure(figsize=(7.8,2), dpi=300) 
 
 ft = 1 #first time flag
+
+cmap = plt.cm.viridis
+colors = [cmap(0.0), cmap(0.5)] 
+set_latex_font()
+
 
 #first is
 def lin_reg_scatter(ax,x):
@@ -280,15 +289,15 @@ def lin_reg_scatter(ax,x):
     y1 = aep_arr_n[3,:][sort_indx] #Gaussian AEP
     y2 = aep_arr_n[4,:][sort_indx] #Jensen AEP
 
-    ax.scatter(xs,y1,alpha=0.5,s=15,marker='x',label=ft*"GF Points")
+    ax.scatter(xs,y1,alpha=0.5,s=15,marker='x',label=ft*"GF Points",color=colors[0])
     # Linear regression 1 (Gaussian Flowers)
     m, b = np.polyfit(xs,y1,1)
-    ax.plot(xs, m*xs + b, lw=1,label=ft*"GF Linear Fit")
+    ax.plot(xs, m*xs + b, lw=1,label=ft*"GF Linear Fit",color=colors[0])
 
-    ax.scatter(xs,y2,alpha=0.5,s=15,marker='+',label=ft*"JF Points")
+    ax.scatter(xs,y2,alpha=0.5,s=15,marker='+',label=ft*"JF Points",color=colors[1])
     #Linear regression 2 (Jensen Flowers)
     m, b = np.polyfit(xs,y2,1)
-    ax.plot(xs, m*xs + b,lw=1,ls='-',label=ft*"JF Linear Fit")
+    ax.plot(xs, m*xs + b,lw=1,ls='-',label=ft*"JF Linear Fit",color=colors[1])
     
     
     ax.xaxis.set_major_locator(MaxNLocator(5))
@@ -296,7 +305,7 @@ def lin_reg_scatter(ax,x):
 
 
 ax1 = fig.add_subplot(gs[0])
-lin_reg_scatter(ax1,mean_ws_arr)
+lin_reg_scatter(ax1,mean_ws_arr.reshape(-1))
 ax1.set(xlabel="Mean Wind Speed / $ms^{-1}$",ylabel="Normalised AEP")
 
 ax2 = fig.add_subplot(gs[1])

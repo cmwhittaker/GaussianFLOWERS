@@ -143,8 +143,10 @@ def get_floris_wind_rose(site_n,align_west=False,n_bins=72,**kwargs):
     current_file_path = Path(__file__)
     folder_name = current_file_path.parent.parent.parent/ "data" / "WindRoseData_D" / ("site"+str(site_n))
 
+    wd=np.arange(0, 360, 360/n_bins)
+
     fl_wr = WindRose()
-    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,**kwargs)
+    fl_wr.parse_wind_toolkit_folder(folder_name,limit_month=None,wd=wd,**kwargs)
     wr = fl_wr.resample_average_ws_by_wd(fl_wr.df)
     wr.freq_val = wr.freq_val/np.sum(wr.freq_val) #frequency sumf to 1
     if align_west: #align predominant direction West
