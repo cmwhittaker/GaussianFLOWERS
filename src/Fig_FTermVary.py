@@ -173,7 +173,8 @@ set_latex_font() #try use latex font
 
 # Define the colormap
 cmap = plt.cm.viridis
-colors = [cmap(0.0), cmap(0.5), cmap(1.0)] 
+colors = ["red", "green", "blue"] 
+line_styles = [(0, (1, 1)),"-.","--"]
 
 xmarkers = np.array([180, 160, 140, 120, 100, 80, 60, 40, 20, 1])
 
@@ -194,8 +195,8 @@ marker  = ['o','x','+']
 
 for i in range(3):
     lbl_text = "Site " + str(site_n[i])
-    ax1.plot(Nterms,aep_d[i,j,:]/aep_d[i,j,0],marker=None,color=colors[i],ms=S,label=lbl_text,mfc='black',mec='black',alpha=0.8)
-    ax2.plot(Nterms,(time_d[i,j,:]/time_d[i,j,0]),marker=None,color=colors[i],ms=S,mec='black',mfc='black',alpha=0.8)
+    ax1.plot(Nterms,aep_d[i,j,:]/aep_d[i,j,0],marker=None,color=colors[i],ms=S,label=lbl_text,mfc='black',mec='black',alpha=0.8,ls=line_styles[i])
+    ax2.plot(Nterms,(time_d[i,j,:]/time_d[i,j,0]),marker=None,color=colors[i],ms=S,mec='black',mfc='black',alpha=0.8,ls=line_styles[i])
 
 fig.legend(loc='upper center',ncols=3)
 

@@ -9,7 +9,7 @@ if hasattr(sys, 'ps1'):
 
 import numpy as np
 
-run = 1
+run = 0
 SAVE_FIG = False
 timed = False 
 if not run:
@@ -276,8 +276,10 @@ fig = plt.figure(figsize=(7.8,2), dpi=300)
 ft = 1 #first time flag
 
 cmap = plt.cm.viridis
-colors = [cmap(0.0), cmap(0.5)] 
+colors = ["red", "green", "blue"] 
+line_styles = [(0, (1, 1)),"-.","--"]
 set_latex_font()
+
 
 
 #first is
@@ -292,12 +294,12 @@ def lin_reg_scatter(ax,x):
     ax.scatter(xs,y1,alpha=0.5,s=15,marker='x',label=ft*"GF Points",color=colors[0])
     # Linear regression 1 (Gaussian Flowers)
     m, b = np.polyfit(xs,y1,1)
-    ax.plot(xs, m*xs + b, lw=1,label=ft*"GF Linear Fit",color=colors[0])
+    ax.plot(xs, m*xs + b, lw=1,label=ft*"GF Linear Fit",color=colors[0],ls=line_styles[0])
 
-    ax.scatter(xs,y2,alpha=0.5,s=15,marker='+',label=ft*"JF Points",color=colors[1])
+    ax.scatter(xs,y2,alpha=0.5,s=20,marker='+',label=ft*"JF Points",color=colors[2])
     #Linear regression 2 (Jensen Flowers)
     m, b = np.polyfit(xs,y2,1)
-    ax.plot(xs, m*xs + b,lw=1,ls='-',label=ft*"JF Linear Fit",color=colors[1])
+    ax.plot(xs, m*xs + b,lw=1,label=ft*"JF Linear Fit",color=colors[2],ls=line_styles[2])
     
     
     ax.xaxis.set_major_locator(MaxNLocator(5))

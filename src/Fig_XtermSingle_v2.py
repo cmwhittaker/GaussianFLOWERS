@@ -12,7 +12,6 @@ XPAD = 7 #X border in normalised rotor DIAMETERS
 YPAD = 7 #Y border in normalised rotor DIAMETERS
 U_inf = 10 #inflow wind speed
 U_LIM = None #manually override ("user limit") the invalid radius around the turbine (otherwise variable, depending on k/Ct) - 
-K = 0.03
 XRES = 800 #number of x points in the contourf meshgrid
 YRES = 400 #must be odd so centerline can be picked later on
 
@@ -20,7 +19,7 @@ from utilities.helpers import linear_layout,rectangular_domain
 xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,_,_ = rectangular_domain(layout,xpad=XPAD,ypad=YPAD,xr=XRES,yr=YRES)
 
-td = 4
+td = 4 #offset
 U_i,P_i,thetaD_i = np.array((U_inf,)),np.array((1,)),np.array((td,)) 
 
 from utilities.AEP3_functions import num_Fs
@@ -74,7 +73,7 @@ from matplotlib.colors import LinearSegmentedColormap
 colors = ["black", "white"]
 cmap1 = LinearSegmentedColormap.from_list("mycmap", colors)
 cf = ax1.contourf(xx,yy,Uwff_b.reshape(xx.shape),50,cmap=cmap1)
-ax1.scatter(layout[:,0],layout[:,1],marker ='x',color='black')
+ax1.scatter(layout[:,0],layout[:,1],marker ='o',color='black',s=10)
 #mark turbine locations
 for i in range(NT): #label each turbine
     an_text = str(i+1)
@@ -90,12 +89,15 @@ cb.set_label("Wind Velocity / $ms^{-1}$")
 from matplotlib.ticker import MaxNLocator
 cax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
+colors = ["red", "green", "blue"] 
+line_styles = [(0, (1, 1)),"-.","--"]
+
 #scatter of per-turbine power generation
 ax2.set_xlabel('Turbine No.')
 ax2.set_ylabel('Power generation / MW')
 ax2.set(xlim=xlims)
-ax2.plot(layout[:,0],powj_a,marker = 'x',color='black',label='Before simplification')
-ax2.plot(layout[:,0],powj_b,marker='+',color='grey',label='After simplifcation')
+ax2.plot(layout[:,0],powj_a,marker = 'x',color=colors[0],label='Before simplification', ls=line_styles[0])
+ax2.plot(layout[:,0],powj_b,marker='+',color=colors[2],label='After simplifcation', ls=line_styles[2])
 ax2.hlines(0,-20,20,ls='--',color='grey',lw=1)
 ax2.legend(loc='upper right')
 xtick_labels = [str(i+1) for i in range(0,NT)]

@@ -1,4 +1,4 @@
-#% A figure to show the thrust and power coefficient of the chosen turbine. 
+#%% A figure to show the thrust and power coefficient of the chosen turbine. 
 
 from utilities.plotting_funcs import set_latex_font
 set_latex_font()
