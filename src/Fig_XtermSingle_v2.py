@@ -19,6 +19,7 @@ from utilities.helpers import linear_layout,rectangular_domain
 xt,yt,layout = linear_layout(NT,SPACING)
 xx,yy,plot_points,_,_ = rectangular_domain(layout,xpad=XPAD,ypad=YPAD,xr=XRES,yr=YRES)
 
+
 td = 4 #offset
 U_i,P_i,thetaD_i = np.array((U_inf,)),np.array((1,)),np.array((td,)) 
 
